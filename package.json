@@ -1,5 +1,6 @@
 {
   "name": "whatsapp-pairing",
+  "version": "1.0.0",
   "description": "WhatsApp Pairing Code Generator",
   "main": "index.js",
   "engines": {
@@ -13,13 +14,13 @@
   "author": "Brashokish",
   "license": "GPL-3.0-only",
   "dependencies": {
-    "@whiskeysockets/baileys": "^6.8.1",
+    "baileys": "^6.8.1",
     "express": "^4.18.2",
     "pino": "^8.17.1",
     "qrcode": "^1.5.3",
     "awesome-phonenumber": "^2.73.0",
     "body-parser": "^1.20.2",
-    "pastebin-js": "^2.0.2"
+    "pastebin-ts": "^1.0.3"
   },
   "keywords": [
     "whatsapp",
