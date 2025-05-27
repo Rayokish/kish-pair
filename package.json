@@ -1,38 +1,25 @@
 {
-  "name": "whatsapp-pairing",
-  "version": "1.0.0",
-  "description": "WhatsApp Pairing Code Generator",
+  "description": "paircode",
   "main": "index.js",
-  "engines": {
+  "engines": { 
     "npm": ">=9.7.2",
-    "node": ">=20.16.0"
+    "node": "20.16.0"
   },
   "scripts": {
-    "start": "node index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node index.js"
   },
   "author": "Brashokish",
   "license": "GPL-3.0-only",
   "dependencies": {
-    "baileys": "^6.8.1",
+    "@whiskeysockets/baileys":"^6.8.1",
+    "maher-zubair-baileys": "^6.6.5",
+    "qrcode": "1.5.3",
+    "awesome-phonenumber": "^2.64.0",
+    "pino": "^8.14.1",
+    "phone": "^3.1.30",
+    "body-parser": "^1.20.1",
+    "pastebin-js": "^1.0.6",
     "express": "^4.18.2",
-    "pino": "^8.17.1",
-    "qrcode": "^1.5.3",
-    "awesome-phonenumber": "^2.73.0",
-    "body-parser": "^1.20.2",
-    "pastebin-ts": "^1.0.3"
-  },
-  "keywords": [
-    "whatsapp",
-    "baileys",
-    "pairing",
-    "automation"
-  ],
-  "repository": {
-    "type": "git",
-    "url": "YOUR_REPO_URL_HERE"
-  },
-  "bugs": {
-    "url": "YOUR_ISSUES_URL_HERE"
+    "path": "^0.12.7"
   }
 }
