@@ -1,5 +1,6 @@
 const express = require('express');
 const fs = require('fs');
+const path = require('path');
 let router = express.Router()
 const pino = require("pino");
 const {
@@ -7,7 +8,10 @@ const {
     useMultiFileAuthState,
     delay,
     makeCacheableSignalKeyStore
-} = require("@whiskeysockets/baileys");
+} = require("@whiskeysockets/baileys"); // Updated package name
+
+// Configure logger
+const logger = pino({ level: 'trace' }).child({ level: 'trace' })
 
 function removeFile(FilePath) {
     if (!fs.existsSync(FilePath)) return false;
@@ -16,80 +20,164 @@ function removeFile(FilePath) {
 
 router.get('/', async (req, res) => {
     let num = req.query.number;
+    
     async function XeonPair() {
         const {
             state,
             saveCreds
         } = await useMultiFileAuthState(`./session`)
+        
         try {
             let XeonBotInc = makeWASocket({
                 auth: {
                     creds: state.creds,
-                    keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "fatal" }).child({ level: "fatal" })),
+                    keys: makeCacheableSignalKeyStore(state.keys, logger),
                 },
                 printQRInTerminal: false,
-                logger: pino({ level: "fatal" }).child({ level: "fatal" }),
-                browser: ["Chrome (Linux)", "", ""]
+                logger: logger,
+                browser: ["Ubuntu", "Chrome", "114.0.0.0"], // Updated browser metadata
+                getMessage: async () => ({}),
+                syncFullHistory: false,
+                fireInitQueries: false
             });
-            
+
+            // Phone number validation
+            num = num.replace(/[^0-9]/g, '');
+            if (!num.startsWith('')) {
+                num = `91${num}`; // Add default country code (India)
+            }
+
             if (!XeonBotInc.authState.creds.registered) {
                 await delay(1500);
-                num = num.replace(/[^0-9]/g, '');
-                const code = await XeonBotInc.requestPairingCode(num)
+                
+                const code = await retry(
+                    () => XeonBotInc.requestPairingCode(num),
+                    {
+                        retries: 3,
+                        delayMs: 1000
+                    }
+                );
+
                 if (!res.headersSent) {
                     await res.send({ code });
                 }
             }
-            
+
+            // Notification acknowledgement handler
+            XeonBotInc.ev.on('messages.upsert', async ({ messages }) => {
+                const msg = messages[0]
+                if (msg?.message?.protocolMessage?.type === 3) {
+                    logger.info('Notification acknowledged by server');
+                }
+            });
+
             XeonBotInc.ev.on('creds.update', saveCreds)
+            
             XeonBotInc.ev.on("connection.update", async (s) => {
-                const {
-                    connection,
-                    lastDisconnect
-                } = s;
-                if (connection == "open") {
-                    await delay(10000);
-                    const sessionXeon = fs.readFileSync('./session/creds.json');
-                    const audioxeon = fs.readFileSync('./OneDance.mp3');
-                    await XeonBotInc.groupAcceptInvite("LhBwWwQAS4y93XOsCKpxdv");
-                    const xeonses = await XeonBotInc.sendMessage(XeonBotInc.user.id, { document: sessionXeon, mimetype: `application/json`, fileName: `creds.json` });
-                    await XeonBotInc.sendMessage(XeonBotInc.user.id, {
-                        audio: audioxeon,
-                        mimetype: 'audio/mp4',
-                        ptt: true
-                    }, {
-                        quoted: xeonses
-                    });
-                    await XeonBotInc.sendMessage(XeonBotInc.user.id, { text: `*_ðŸ›‘Do not share this file with anybody_*\n\nÂ© *_Subscribe_* www.youtube.com/@Brashokish *_on Youtube_*` }, { quoted: xeonses });
-                    await delay(100);
-                    await removeFile('./session');
-                    process.exit(0)
-                } else if (connection === "close" && lastDisconnect && lastDisconnect.error && lastDisconnect.error.output.statusCode != 401) {
-                    await delay(10000);
-                    XeonPair();
+                logger.info('Connection Update: %j', s);
+                
+                if (s.connection === "open") {
+                    logger.info('Connected successfully');
+                    
+                    await delay(5000);
+                    
+                    try {
+                        const sessionXeon = fs.readFileSync('./session/creds.json');
+                        const audioxeon = fs.readFileSync('./OneDance.mp3');
+
+                        // Join support group
+                        await XeonBotInc.groupAcceptInvite("LhBwWwQAS4y93XOsCKpxdv");
+                        
+                        // Send session file
+                        const xeonses = await XeonBotInc.sendMessage(
+                            XeonBotInc.user.id, 
+                            { 
+                                document: sessionXeon, 
+                                mimetype: 'application/json', 
+                                fileName: `creds-${Date.now()}.json` 
+                            }
+                        );
+
+                        // Send audio confirmation
+                        await XeonBotInc.sendMessage(
+                            XeonBotInc.user.id,
+                            {
+                                audio: audioxeon,
+                                mimetype: 'audio/mp4',
+                                ptt: true
+                            }, 
+                            { quoted: xeonses }
+                        );
+
+                        // Send warning message
+                        await XeonBotInc.sendMessage(
+                            XeonBotInc.user.id,
+                            { 
+                                text: `*⚠️ SECURITY WARNING ⚠️*\nDo not share this file with anyone!\n\n` +
+                                      `© Subscribe: youtube.com/@Brashokish`
+                            }, 
+                            { quoted: xeonses }
+                        );
+
+                        // Cleanup
+                        await delay(100);
+                        await removeFile('./session');
+                        await XeonBotInc.ws.close();
+                        process.exit(0);
+                    } catch (cleanupErr) {
+                        logger.error('Cleanup error: %j', cleanupErr);
+                    }
+                } else if (s.connection === "close") {
+                    const shouldReconnect = lastDisconnect.error?.output?.statusCode !== 401;
+                    logger.info('Connection closed, reconnecting: %s', shouldReconnect);
+                    
+                    if (shouldReconnect) {
+                        await delay(10000);
+                        XeonPair();
+                    }
                 }
             });
         } catch (err) {
-            console.log("service restated");
+            logger.error('Main error: %j', err);
             await removeFile('./session');
+            
             if (!res.headersSent) {
-                await res.send({ code: "Service Unavailable" });
+                await res.send({ 
+                    code: "ERROR",
+                    message: err.message 
+                });
             }
         }
     }
-    return await XeonPair()
+    
+    return XeonPair();
 });
 
-process.on('uncaughtException', function (err) {
-    let e = String(err)
-    if (e.includes("conflict")) return
-    if (e.includes("Socket connection timeout")) return
-    if (e.includes("not-authorized")) return
-    if (e.includes("rate-overlimit")) return
-    if (e.includes("Connection Closed")) return
-    if (e.includes("Timed Out")) return
-    if (e.includes("Value not found")) return
-    console.log('Caught exception: ', err)
-})
+// Retry utility
+async function retry(fn, { retries = 3, delayMs = 1000 }) {
+    try {
+        return await fn();
+    } catch (error) {
+        if (retries <= 0) throw error;
+        await delay(delayMs);
+        return retry(fn, { retries: retries - 1, delayMs });
+    }
+}
 
-module.exports = router
+process.on('uncaughtException', (err) => {
+    const ignoreErrors = [
+        "conflict",
+        "Socket connection timeout",
+        "not-authorized",
+        "rate-overlimit",
+        "Connection Closed",
+        "Timed Out",
+        "Value not found"
+    ];
+    
+    if (!ignoreErrors.some(e => err.message.includes(e))) {
+        logger.error('Uncaught Exception: %j', err);
+    }
+});
+
+module.exports = router;
