@@ -1,11 +1,10 @@
 const express = require('express');
+const router = express.Router();
 const path = require('path');
 const { toBuffer } = require('qrcode');
 const fs = require('fs');
 const pino = require('pino');
-
-// Baileys imports
-const { 
+const {
   default: makeWASocket,
   useMultiFileAuthState,
   delay,
@@ -13,10 +12,6 @@ const {
   makeCacheableSignalKeyStore
 } = require('@whiskeysockets/baileys');
 
-const app = express();
-const PORT = process.env.PORT || 3000;
-
-// Session management
 const SESSION_FOLDER = './SESSION';
 
 const cleanupSession = () => {
@@ -30,16 +25,14 @@ const cleanupSession = () => {
   }
 };
 
-// Main QR endpoint
-app.get('/', async (req, res) => {
+router.get('/', async (req, res) => {
   cleanupSession();
-  
+
   try {
     const { state, saveCreds } = await useMultiFileAuthState(SESSION_FOLDER);
     let conn = null;
     let qrSent = false;
 
-    // QR timeout (3 minutes)
     const qrTimeout = setTimeout(() => {
       if (!qrSent) {
         res.status(408).send('QR timeout');
@@ -62,7 +55,6 @@ app.get('/', async (req, res) => {
     conn.ev.on('connection.update', async (update) => {
       const { qr, connection, lastDisconnect } = update;
 
-      // Send QR code
       if (qr && !qrSent) {
         try {
           clearTimeout(qrTimeout);
@@ -75,7 +67,6 @@ app.get('/', async (req, res) => {
         }
       }
 
-      // On successful connection
       if (connection === 'open') {
         console.log('Connected successfully');
         await delay(3000);
@@ -95,11 +86,10 @@ app.get('/', async (req, res) => {
 
           await conn.sendMessage(conn.user.id, {
             text: '✅ Successfully connected!\n\n' +
-                  '⚠️ Keep your session file secure!\n\n' +
-                  '🔒 Do not share with anyone!'
+              '⚠️ Keep your session file secure!\n\n' +
+              '🔒 Do not share with anyone!'
           });
 
-          // Cleanup
           await delay(1000);
           conn.ws.close();
           cleanupSession();
@@ -110,19 +100,16 @@ app.get('/', async (req, res) => {
         }
       }
 
-      // Handle reconnection
-      if (connection === 'close' && 
-          lastDisconnect?.error?.output?.statusCode !== 401) {
+      if (connection === 'close' && lastDisconnect?.error?.output?.statusCode !== 401) {
         console.log('Reconnecting...');
         await delay(5000);
         cleanupSession();
-        return res.redirect('/'); // Refresh the page for new QR
+        return res.redirect('/qr');
       }
     });
 
     conn.ev.on('creds.update', saveCreds);
 
-    // Handle client disconnect
     req.on('close', () => {
       if (!qrSent) {
         clearTimeout(qrTimeout);
@@ -138,12 +125,4 @@ app.get('/', async (req, res) => {
   }
 });
 
-// Error handling middleware
-app.use((err, req, res, next) => {
-  console.error('Server error:', err);
-  res.status(500).send('Internal Server Error');
-});
-
-app.listen(PORT, () => {
-  console.log(`QR pairing service running on port ${PORT}`);
-});
+module.exports = router;
