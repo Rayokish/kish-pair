@@ -37,7 +37,8 @@ async function connectWithRetry(connectFn, maxRetries = 3, retryDelay = 5000) {
 
   while (retries < maxRetries) {
     try {
-      return await connectFn();
+      const conn = await connectFn();
+      return conn;
     } catch (err) {
       retries++;
       console.error(`Connection attempt ${retries} failed:`, err.message);
@@ -58,19 +59,17 @@ router.get('/', async (req, res) => {
   try {
     const { state, saveCreds } = await useMultiFileAuthState(SESSION_FOLDER);
     const { version } = await fetchLatestBaileysVersion();
-    let conn = null;
+
     let qrSent = false;
 
     const qrTimeout = setTimeout(() => {
       if (!qrSent) {
         res.status(408).send('QR timeout');
-        if (conn) conn.end();
-        cleanupSession();
       }
     }, 120000);
 
-    const connectFn = async () => {
-      conn = makeWASocket({
+    const connectFn = () => new Promise((resolve, reject) => {
+      const conn = makeWASocket({
         logger: pino({ level: 'silent' }),
         auth: state,
         browser: Browsers.ubuntu('Chrome'),
@@ -84,67 +83,73 @@ router.get('/', async (req, res) => {
         const { qr, connection, lastDisconnect } = update;
 
         if (qr && !qrSent) {
+          clearTimeout(qrTimeout);
+          qrSent = true;
+          console.log('QR code generated');
           try {
-            clearTimeout(qrTimeout);
-            qrSent = true;
-            console.log('QR code generated');
             const qrBuffer = await toBuffer(qr);
-            res.type('png').send(qrBuffer);
+            if (!res.headersSent) {
+              res.type('png').send(qrBuffer);
+            }
           } catch (qrErr) {
             console.error('QR generation error:', qrErr);
             if (!res.headersSent) res.status(500).send('QR generation failed');
+            conn.end();
+            reject(qrErr);
           }
         }
 
         if (connection === 'open') {
           console.log('Connected successfully');
-          await delay(2000);
-
           try {
+            await delay(2000);
             await saveCreds();
-            const credsPath = path.join(SESSION_FOLDER, 'creds.json');
-            if (!fs.existsSync(credsPath)) {
-              throw new Error('creds.json not found');
-            }
 
+            // Send a welcome message to self
             await conn.sendMessage(conn.user.id, {
               text: '✅ Connection established!\n\n⚠️ Do not share your session data with anyone.'
             });
 
-            await conn.end();
-            await cleanupSession();
+            resolve(conn);  // Resolve the promise to indicate successful connection
           } catch (e) {
             console.error('Post-connection error:', e);
-            if (conn) conn.end();
-            await cleanupSession();
+            conn.end();
+            reject(e);
           }
         }
 
         if (connection === 'close') {
           const error = lastDisconnect?.error;
           console.log('Disconnected:', error?.stack || error?.message || 'Unknown reason');
-          if (error?.output?.statusCode !== 401) {
-            console.log('Attempting reconnect...');
-            await delay(5000);
+
+          if (error?.output?.statusCode === 401) {
+            // Unauthorized, session invalid - cleanup and reject without retry
             await cleanupSession();
-            connectFn();
+            reject(new Error('Unauthorized, session invalid'));
           } else {
-            await cleanupSession();
+            // For other errors, reject to trigger retry
+            reject(error || new Error('Connection closed'));
           }
         }
       });
 
       conn.ev.on('creds.update', saveCreds);
-    };
 
-    await connectWithRetry(connectFn);
-
-    req.on('close', () => {
-      if (!qrSent && conn) {
-        conn.end();
-        cleanupSession();
-      }
+      // Close connection if client disconnects early
+      req.on('close', () => {
+        if (!qrSent) {
+          if (!conn.destroyed) conn.end();
+          cleanupSession();
+          reject(new Error('Client closed connection before QR scan'));
+        }
+      });
     });
+
+    const conn = await connectWithRetry(connectFn);
+
+    // Clean up session after sending the connection success message and closing socket
+    await conn.end();
+    await cleanupSession();
 
   } catch (err) {
     console.error('Initialization error:', err);
