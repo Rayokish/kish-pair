@@ -1,19 +1,20 @@
 const express = require('express');
 const router = express.Router();
 const path = require('path');
-const { toBuffer } = require('qrcode');
 const fs = require('fs');
 const pino = require('pino');
+const { toBuffer } = require('qrcode');
 const {
   default: makeWASocket,
   useMultiFileAuthState,
   delay,
-  Browsers
+  Browsers,
+  fetchLatestBaileysVersion
 } = require('@whiskeysockets/baileys');
 
 const SESSION_FOLDER = './SESSION';
 
-// Enhanced session cleanup
+// Session cleanup function
 const cleanupSession = async () => {
   if (fs.existsSync(SESSION_FOLDER)) {
     try {
@@ -25,10 +26,10 @@ const cleanupSession = async () => {
   }
 };
 
-// Connection retry handler
+// Connection retry logic
 async function connectWithRetry(connectFn, maxRetries = 3, retryDelay = 5000) {
   let retries = 0;
-  
+
   while (retries < maxRetries) {
     try {
       return await connectFn();
@@ -36,9 +37,10 @@ async function connectWithRetry(connectFn, maxRetries = 3, retryDelay = 5000) {
       retries++;
       console.error(`Connection attempt ${retries} failed:`, err.message);
       if (retries < maxRetries) {
-        console.log(`Retrying in ${retryDelay/1000} seconds...`);
+        console.log(`Retrying in ${retryDelay / 1000} seconds...`);
         await delay(retryDelay);
         await cleanupSession();
+        await delay(1000);
       }
     }
   }
@@ -47,36 +49,38 @@ async function connectWithRetry(connectFn, maxRetries = 3, retryDelay = 5000) {
 
 router.get('/', async (req, res) => {
   await cleanupSession();
+  await delay(1000);
 
   try {
     const { state, saveCreds } = await useMultiFileAuthState(SESSION_FOLDER);
+    const { version } = await fetchLatestBaileysVersion();
     let conn = null;
     let qrSent = false;
 
     const qrTimeout = setTimeout(() => {
       if (!qrSent) {
-        res.status(408).send('QR timeout');
+        if (!res.headersSent) res.status(408).send('QR timeout');
         if (conn) conn.end();
         cleanupSession();
       }
-    }, 120000);
+    }, 120000); // 2 minutes
 
     const connectFn = async () => {
       conn = makeWASocket({
         logger: pino({ level: 'silent' }),
         auth: {
           creds: state.creds,
-          keys: state.keys,
+          keys: state.keys
         },
         browser: Browsers.ubuntu('Chrome'),
         syncFullHistory: false,
-        version: [2, 2413, 1],
+        version: version,
         connectTimeoutMs: 30000,
         keepAliveIntervalMs: 15000
       });
 
       conn.ev.on('connection.update', async (update) => {
-        const { qr, connection, lastDisconnect, isNewLogin } = update;
+        const { qr, connection, lastDisconnect } = update;
 
         if (qr && !qrSent) {
           try {
@@ -94,23 +98,20 @@ router.get('/', async (req, res) => {
         if (connection === 'open') {
           console.log('Connected successfully');
           await delay(2000);
-
           try {
             await saveCreds();
+
             const credsPath = path.join(SESSION_FOLDER, 'creds.json');
-            if (!fs.existsSync(credsPath)) {
-              throw new Error('creds.json not found');
-            }
+            if (!fs.existsSync(credsPath)) throw new Error('creds.json not found');
 
             await conn.sendMessage(conn.user.id, {
-              text: '✅ Connection established!\n\n' +
-                    '⚠️ Do not share your session data with anyone'
+              text: '✅ Connection established!\n\n⚠️ Do not share your session data with anyone.'
             });
 
             await conn.end();
             await cleanupSession();
-          } catch (e) {
-            console.error('Post-connection error:', e);
+          } catch (err) {
+            console.error('Post-connection error:', err);
             if (conn) conn.end();
             await cleanupSession();
           }
@@ -119,12 +120,13 @@ router.get('/', async (req, res) => {
         if (connection === 'close') {
           const error = lastDisconnect?.error;
           console.log('Disconnected:', error?.message || 'Unknown reason');
+
           if (error?.output?.statusCode !== 401) {
             console.log('Attempting reconnect...');
             await delay(5000);
-            await cleanupSession();
-            connectFn();
+            await connectWithRetry(connectFn);
           } else {
+            console.log('401 Unauthorized. Cleaning session...');
             await cleanupSession();
           }
         }
