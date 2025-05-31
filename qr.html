@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WhatsApp QR Pairing</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      background: #f5f5f5;
+      padding: 20px;
+    }
+    .container {
+      max-width: 400px;
+      margin: 0 auto;
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    }
+    #qr-code {
+      margin: 20px 0;
+    }
+    #status {
+      margin-top: 15px;
+      font-weight: bold;
+    }
+    button {
+      background: #25D366;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    button:hover {
+      background: #128C7E;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>Scan WhatsApp QR Code</h2>
+    <div id="qr-code">
+      <img id="qr-image" src="" alt="QR Code">
+    </div>
+    <div id="status">Loading QR code...</div>
+    <button id="refresh-btn">Refresh QR</button>
+  </div>
+
+  <script>
+    const qrImage = document.getElementById('qr-image');
+    const statusDiv = document.getElementById('status');
+    const refreshBtn = document.getElementById('refresh-btn');
+
+    // Function to fetch new QR code
+    async function fetchQR() {
+      try {
+        statusDiv.textContent = 'Generating QR code...';
+        const response = await fetch('/qr-api');
+        if (!response.ok) throw new Error('Failed to load QR');
+        
+        const qrBlob = await response.blob();
+        const qrUrl = URL.createObjectURL(qrBlob);
+        qrImage.src = qrUrl;
+        statusDiv.textContent = 'Scan this QR in WhatsApp →';
+      } catch (error) {
+        statusDiv.textContent = '❌ Error: ' + error.message;
+        console.error('QR error:', error);
+      }
+    }
+
+    // Auto-refresh QR every 30 sec (optional)
+    let refreshInterval = setInterval(fetchQR, 30000);
+
+    // Manual refresh
+    refreshBtn.addEventListener('click', () => {
+      clearInterval(refreshInterval);
+      fetchQR();
+      refreshInterval = setInterval(fetchQR, 30000);
+    });
+
+    // Initial load
+    fetchQR();
+  </script>
+</body>
+</html>
