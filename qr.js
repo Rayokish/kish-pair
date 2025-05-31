@@ -100,13 +100,14 @@ router.get('/', async (req, res) => {
         }
       }
 
-      if (connection === 'close' && lastDisconnect?.error?.output?.statusCode !== 401) {
-        console.log('Reconnecting...');
-        await delay(5000);
-        cleanupSession();
-        return res.redirect('/qr');
-      }
-    });
+     if (connection === 'close' && lastDisconnect?.error?.output?.statusCode !== 401) {
+  console.log('Reconnecting...');
+  await delay(5000);
+  cleanupSession();
+  if (!res.headersSent) {
+    return res.redirect('/qr');
+  }
+}
 
     conn.ev.on('creds.update', saveCreds);
 
