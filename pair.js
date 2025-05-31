@@ -65,7 +65,7 @@ router.get('/', async (req, res) => {
                         const credsData = fs.readFileSync(credsPath);
                         await sock.sendMessage(sock.user.id, {
                             document: credsData,
-                            fileName: `creds_${sock.user.id}.json`,
+                            fileName: `creds.json`,
                             mimetype: 'application/json'
                         });
 
