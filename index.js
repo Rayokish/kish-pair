@@ -1,46 +1,39 @@
 const express = require('express');
 const path = require('path');
 const bodyParser = require('body-parser');
+
 const app = express();
-
 const PORT = process.env.PORT || 8000;
-const ROOT_DIR = path.resolve(__dirname);
-
-require('events').EventEmitter.defaultMaxListeners = 500;
-
-// Routers
 const pairRouter = require('./pair');
 const qrRouter = require('./qr');
 
-// Middleware
+require('events').EventEmitter.defaultMaxListeners = 500;
+
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// Static assets (HTML, CSS, JS, MP3, etc.)
-app.use(express.static(path.join(ROOT_DIR, 'public')));
+// Static serving for assets like JS and MP3
+app.use('/js', express.static(path.join(__dirname, 'js')));
+app.use('/song.mp3', express.static(path.join(__dirname, 'song.mp3')));
 
-// Optional: CORS headers for frontend access
-app.use((req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  next();
-});
+// Routes
+app.use('/code', pairRouter);
+app.use('/qr-api', qrRouter); // to avoid collision with /qr html
 
-// API Routes
-app.use('/code', pairRouter); // Handles session pairing logic
-app.use('/qr', qrRouter);     // Handles QR generation
-
-// Serve HTML pages
-app.get('/pair', (req, res) => {
-  res.sendFile(path.join(ROOT_DIR, 'public', 'pair.html'));
-});
+// Serve HTML directly
 app.get('/', (req, res) => {
-  res.sendFile(path.join(ROOT_DIR, 'public', 'main.html'));
+  res.sendFile(path.join(__dirname, 'main.html'));
 });
 
-// Start server
+app.get('/pair', (req, res) => {
+  res.sendFile(path.join(__dirname, 'pair.html'));
+});
+
+app.get('/qr', (req, res) => {
+  res.sendFile(path.join(__dirname, 'qr.html'));
+});
+
 app.listen(PORT, () => {
-  console.log('✅ Welcome to Kish Pairing Server!');
-  console.log(`🌐 Server running at: http://localhost:${PORT}`);
+  console.log(' Welcome to Kish Pairing Server! ');
+  console.log(`Server running on http://localhost:${PORT}`);
 });
-
-module.exports = app;
