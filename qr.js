@@ -8,29 +8,21 @@ const {
   default: makeWASocket,
   useMultiFileAuthState,
   delay,
-  Browsers,
-  makeCacheableSignalKeyStore
+  Browsers
 } = require('@whiskeysockets/baileys');
 
 const SESSION_FOLDER = './SESSION';
 
-// Improved cleanup function
+// Enhanced cleanup with async/await
 const cleanupSession = async () => {
   if (fs.existsSync(SESSION_FOLDER)) {
     try {
       await fs.promises.rm(SESSION_FOLDER, { recursive: true, force: true });
-      console.log('Session cleanup successful');
+      console.log('Session cleaned successfully');
     } catch (err) {
-      console.error('Session cleanup error:', err);
+      console.error('Cleanup error:', err);
     }
   }
-};
-
-// Device linking information
-const DEVICE_INFO = {
-  deviceName: 'MyWhatsAppDevice', // Customize this
-  deviceType: 'android', // or 'ios', 'desktop'
-  browser: Browsers.macOS('Safari')
 };
 
 router.get('/', async (req, res) => {
@@ -47,23 +39,22 @@ router.get('/', async (req, res) => {
         if (conn) conn.end();
         cleanupSession();
       }
-    }, 180000);
+    }, 120000); // Reduced timeout to 2 minutes
 
     conn = makeWASocket({
-      printQRInTerminal: true, // Keep this true for debugging
+      printQRInTerminal: true,
       logger: pino({ level: 'silent' }),
       auth: {
         creds: state.creds,
-        keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' }))
+        keys: state.keys, // Removed makeCacheableSignalKeyStore
       },
-      browser: DEVICE_INFO.browser,
+      browser: Browsers.ubuntu('Chrome'), // Changed to desktop browser
       syncFullHistory: false,
-      mobile: DEVICE_INFO.deviceType !== 'desktop', // Set mobile flag
-      markOnlineOnConnect: true // Better device linking
+      version: [2, 2413, 1] // Specify a supported version
     });
 
     conn.ev.on('connection.update', async (update) => {
-      const { qr, connection, lastDisconnect, isNewLogin } = update;
+      const { qr, connection, lastDisconnect } = update;
 
       if (qr && !qrSent) {
         try {
@@ -72,88 +63,58 @@ router.get('/', async (req, res) => {
           const qrBuffer = await toBuffer(qr);
           res.type('png').send(qrBuffer);
         } catch (qrErr) {
-          console.error('QR generation error:', qrErr);
-          if (!res.headersSent) res.status(500).send('QR generation failed');
+          console.error('QR error:', qrErr);
+          if (!res.headersSent) res.status(500).send('QR failed');
         }
       }
 
       if (connection === 'open') {
-        console.log('Connected successfully');
-        await delay(3000); // Wait for full connection
+        console.log('Connected!');
+        await delay(2000);
 
         try {
-          // Save credentials explicitly
+          // Ensure credentials are saved
           await saveCreds();
-
-          // Verify creds.json exists
+          
           const credsPath = path.join(SESSION_FOLDER, 'creds.json');
           if (!fs.existsSync(credsPath)) {
-            throw new Error('creds.json not found after connection');
+            throw new Error('No credentials found');
           }
 
-          // Read and send session data
           const sessionData = fs.readFileSync(credsPath);
-          
-          // Send session file to user
           await conn.sendMessage(conn.user.id, {
-            document: sessionData,
-            fileName: `whatsapp_session_${conn.user.id.replace(/[^0-9]/g, '')}.json`,
-            mimetype: 'application/json'
+            text: '✅ Connection successful!\n\n' +
+                  '⚠️ Save your session file securely'
           });
 
-          // Send confirmation message
-          await conn.sendMessage(conn.user.id, {
-            text: `✅ Successfully connected as ${DEVICE_INFO.deviceName}!\n\n` +
-                  '⚠️ Keep your session file secure!\n\n' +
-                  '🔒 Do not share with anyone!'
-          });
-
-          // Clean up after sending
-          await delay(1000);
-          conn.end();
+          await conn.end();
           await cleanupSession();
-        } catch (sendErr) {
-          console.error('Session send error:', sendErr);
+        } catch (e) {
+          console.error('Session error:', e);
           if (conn) conn.end();
           await cleanupSession();
         }
       }
 
       if (connection === 'close') {
-        const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== 401;
-        console.log(`Connection closed. ${shouldReconnect ? 'Reconnecting...' : 'Login expired.'}`);
-        
-        if (shouldReconnect) {
-          await delay(5000);
-          await cleanupSession();
-          if (!res.headersSent) res.redirect('/qr');
-        } else {
-          await cleanupSession();
-        }
-      }
-
-      // Handle new logins for better device linking
-      if (isNewLogin) {
-        console.log('New device linked successfully');
+        console.log('Disconnected');
+        await cleanupSession();
       }
     });
 
-    // Handle credentials updates
     conn.ev.on('creds.update', saveCreds);
 
-    // Handle client disconnection
     req.on('close', () => {
-      if (!qrSent) {
-        clearTimeout(qrTimeout);
-        if (conn) conn.end();
+      if (!qrSent && conn) {
+        conn.end();
         cleanupSession();
       }
     });
 
-  } catch (initErr) {
-    console.error('Initialization error:', initErr);
+  } catch (err) {
+    console.error('Initial error:', err);
     if (!res.headersSent) {
-      res.status(500).send('Initialization failed');
+      res.status(500).send('Connection failed');
     }
     await cleanupSession();
   }
