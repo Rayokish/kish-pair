@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>KISH-MD PAIR CODE</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
@@ -19,7 +19,7 @@
 
     .container {
       position: relative;
-      z-index: 1;
+      z-index: 2;
     }
 
     .box {
@@ -47,6 +47,8 @@
       );
       transform: rotate(30deg);
       animation: shine 6s infinite;
+      pointer-events: none;
+      z-index: 0;
     }
 
     @keyframes shine {
@@ -96,6 +98,7 @@
       border-right: none;
       outline: none;
       text-shadow: 0 0 5px #0ff;
+      z-index: 1;
     }
 
     .input-container button {
@@ -176,12 +179,12 @@
       <h2>KISH-MD PAIR</h2>
       <h6>⚙ Enter your number with country code ⚙</h6>
       <div class="input-container">
-        <input type="number" id="number" placeholder="+25473075">
+        <input type="text" id="number" placeholder="+1234567890" inputmode="numeric">
         <button id="submit">ENTER</button>
       </div>
       <a id="waiting-message" class="centered-text">in process...</a>
       <main id="pair"></main>
-      <div class="powered-by">Powered by KISH </div>
+      <div class="powered-by">Powered by KISH-MD</div>
     </div>
   </div>
 
@@ -192,22 +195,23 @@
     let numberInput = document.getElementById("number");
     let waitingMessage = document.getElementById("waiting-message");
 
+    numberInput.addEventListener('input', function(e) {
+      this.value = this.value.replace(/[^0-9+]/g, '');
+    });
+
     async function copyCode() {
       let text = document.getElementById("copy").innerText;
-      let element = document.getElementById("copy");
-      await navigator.clipboard.writeText(element.innerText.replace('CODE: ', ''));
-      element.innerText = "COPIED!";
-      element.style.color = "#0ff";
+      await navigator.clipboard.writeText(text.replace('CODE: ', ''));
+      document.getElementById("copy").innerText = "COPIED!";
       setTimeout(() => {
-        element.innerText = text;
-        element.style.color = "#f0f";
+        document.getElementById("copy").innerText = text;
       }, 1000);
     }
 
     submitButton.addEventListener("click", async (e) => {
       e.preventDefault();
       waitingMessage.style.display = "block";
-      
+
       if (!numberInput.value) {
         pairElement.innerHTML = '<span style="color:#f0f; text-shadow:0 0 10px #f0f;">❗ Enter your WhatsApp number</span>';
         waitingMessage.style.display = "none";
@@ -215,7 +219,7 @@
       }
 
       const cleanNumber = numberInput.value.replace(/[^0-9]/g, "");
-      
+
       if (cleanNumber.length < 11) {
         pairElement.innerHTML = '<span style="color:#f0f; text-shadow:0 0 10px #f0f;">❌ Invalid number format</span>';
         waitingMessage.style.display = "none";
@@ -225,10 +229,10 @@
       try {
         const formattedNumber = `+${cleanNumber.substring(0, 3)} ${cleanNumber.substring(3, 8)} ${cleanNumber.substring(8)}`;
         numberInput.value = formattedNumber;
-        
+
         const { data } = await axios.get(`/code?number=${cleanNumber}`);
         const code = data.code || "Service Unavailable";
-        
+
         pairElement.innerHTML = `
           <div id="copy" onclick="copyCode()" style="cursor: pointer; color:#f0f; text-shadow:0 0 10px #f0f;">
             CODE: <span style="color:#0ff; text-shadow:0 0 10px #0ff;">${code}</span>
@@ -238,6 +242,12 @@
         pairElement.innerHTML = '<span style="color:#f0f; text-shadow:0 0 10px #f0f;">⚠️ Connection Error</span>';
       } finally {
         waitingMessage.style.display = "none";
+      }
+    });
+
+    numberInput.addEventListener("keypress", function(event) {
+      if (event.key === "Enter") {
+        submitButton.click();
       }
     });
   </script>
