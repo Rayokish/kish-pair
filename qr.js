@@ -13,7 +13,7 @@ const {
 
 const SESSION_FOLDER = './SESSION';
 
-// Enhanced cleanup with async/await
+// Enhanced async cleanup
 const cleanupSession = async () => {
   if (fs.existsSync(SESSION_FOLDER)) {
     try {
@@ -33,77 +33,87 @@ router.get('/', async (req, res) => {
     let conn = null;
     let qrSent = false;
 
+    // 2 minute timeout
     const qrTimeout = setTimeout(() => {
       if (!qrSent) {
         res.status(408).send('QR timeout');
         if (conn) conn.end();
         cleanupSession();
       }
-    }, 120000); // Reduced timeout to 2 minutes
+    }, 120000);
 
     conn = makeWASocket({
-      printQRInTerminal: true,
+      // Removed deprecated printQRInTerminal
       logger: pino({ level: 'silent' }),
       auth: {
         creds: state.creds,
-        keys: state.keys, // Removed makeCacheableSignalKeyStore
+        keys: state.keys,
       },
-      browser: Browsers.ubuntu('Chrome'), // Changed to desktop browser
+      browser: Browsers.ubuntu('Chrome'),
       syncFullHistory: false,
-      version: [2, 2413, 1] // Specify a supported version
+      version: [2, 2413, 1] // Stable version
     });
 
     conn.ev.on('connection.update', async (update) => {
       const { qr, connection, lastDisconnect } = update;
 
+      // Handle QR code generation
       if (qr && !qrSent) {
         try {
           clearTimeout(qrTimeout);
           qrSent = true;
+          console.log('Generating QR code...'); // Debug log
+          
           const qrBuffer = await toBuffer(qr);
           res.type('png').send(qrBuffer);
         } catch (qrErr) {
-          console.error('QR error:', qrErr);
-          if (!res.headersSent) res.status(500).send('QR failed');
+          console.error('QR generation error:', qrErr);
+          if (!res.headersSent) res.status(500).send('QR generation failed');
         }
       }
 
+      // Handle successful connection
       if (connection === 'open') {
-        console.log('Connected!');
-        await delay(2000);
+        console.log('Connected successfully');
+        await delay(2000); // Short delay for stability
 
         try {
-          // Ensure credentials are saved
+          // Save credentials explicitly
           await saveCreds();
           
           const credsPath = path.join(SESSION_FOLDER, 'creds.json');
           if (!fs.existsSync(credsPath)) {
-            throw new Error('No credentials found');
+            throw new Error('creds.json not found');
           }
 
-          const sessionData = fs.readFileSync(credsPath);
+          // Send success message
           await conn.sendMessage(conn.user.id, {
-            text: '✅ Connection successful!\n\n' +
-                  '⚠️ Save your session file securely'
+            text: '✅ Connected successfully!\n\n' +
+                  '⚠️ Session established securely\n\n' +
+                  '🔒 Your credentials are saved in the session folder'
           });
 
+          // Clean up
           await conn.end();
           await cleanupSession();
-        } catch (e) {
-          console.error('Session error:', e);
+        } catch (sendErr) {
+          console.error('Session error:', sendErr);
           if (conn) conn.end();
           await cleanupSession();
         }
       }
 
+      // Handle disconnection
       if (connection === 'close') {
-        console.log('Disconnected');
+        console.log('Disconnected:', lastDisconnect?.error?.message || 'Unknown reason');
         await cleanupSession();
       }
     });
 
+    // Handle credentials updates
     conn.ev.on('creds.update', saveCreds);
 
+    // Handle client disconnection
     req.on('close', () => {
       if (!qrSent && conn) {
         conn.end();
@@ -111,10 +121,10 @@ router.get('/', async (req, res) => {
       }
     });
 
-  } catch (err) {
-    console.error('Initial error:', err);
+  } catch (initErr) {
+    console.error('Initialization error:', initErr);
     if (!res.headersSent) {
-      res.status(500).send('Connection failed');
+      res.status(500).send('Initialization failed');
     }
     await cleanupSession();
   }
