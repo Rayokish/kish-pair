@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>WhatsApp QR Pairing</title>
+  <title>Kish-MD Qr Code</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -19,12 +19,18 @@
       border-radius: 10px;
       box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
     }
+    h2 {
+      color: #25D366;
+      text-shadow: 0 0 5px #25D366, 0 0 10px #25D366, 0 0 20px #25D366;
+    }
     #qr-code {
       margin: 20px 0;
     }
     #status {
       margin-top: 15px;
       font-weight: bold;
+      color: #128C7E;
+      text-shadow: 0 0 5px #128C7E, 0 0 10px #128C7E, 0 0 15px #128C7E;
     }
     button {
       background: #25D366;
@@ -34,6 +40,8 @@
       border-radius: 5px;
       cursor: pointer;
       font-size: 16px;
+      box-shadow: 0 4px 10px rgba(37, 211, 102, 0.5);
+      transition: background 0.3s;
     }
     button:hover {
       background: #128C7E;
@@ -42,12 +50,12 @@
 </head>
 <body>
   <div class="container">
-    <h2>Scan WhatsApp QR Code</h2>
+    <h2>🌐 Scan WhatsApp QR Code</h2>
     <div id="qr-code">
       <img id="qr-image" src="" alt="QR Code">
     </div>
     <div id="status">Loading QR code...</div>
-    <button id="refresh-btn">Refresh QR</button>
+    <button id="refresh-btn">🔄 Refresh QR</button>
   </div>
 
   <script>
@@ -59,20 +67,20 @@
     async function fetchQR() {
       try {
         statusDiv.textContent = 'Generating QR code...';
-        const response = await fetch('/qr-api');
+        const response = await fetch('/');
         if (!response.ok) throw new Error('Failed to load QR');
-        
+
         const qrBlob = await response.blob();
         const qrUrl = URL.createObjectURL(qrBlob);
         qrImage.src = qrUrl;
-        statusDiv.textContent = 'Scan this QR in WhatsApp →';
+        statusDiv.textContent = '✅ Scan this QR in WhatsApp →';
       } catch (error) {
         statusDiv.textContent = '❌ Error: ' + error.message;
         console.error('QR error:', error);
       }
     }
 
-    // Auto-refresh QR every 30 sec (optional)
+    // Auto-refresh QR every 30 sec
     let refreshInterval = setInterval(fetchQR, 30000);
 
     // Manual refresh
