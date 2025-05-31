@@ -13,7 +13,7 @@ const {
 
 const SESSION_FOLDER = './SESSION';
 
-// Enhanced async cleanup
+// Enhanced session cleanup
 const cleanupSession = async () => {
   if (fs.existsSync(SESSION_FOLDER)) {
     try {
@@ -25,6 +25,26 @@ const cleanupSession = async () => {
   }
 };
 
+// Connection retry handler
+async function connectWithRetry(connectFn, maxRetries = 3, retryDelay = 5000) {
+  let retries = 0;
+  
+  while (retries < maxRetries) {
+    try {
+      return await connectFn();
+    } catch (err) {
+      retries++;
+      console.error(`Connection attempt ${retries} failed:`, err.message);
+      if (retries < maxRetries) {
+        console.log(`Retrying in ${retryDelay/1000} seconds...`);
+        await delay(retryDelay);
+        await cleanupSession();
+      }
+    }
+  }
+  throw new Error(`Max retries (${maxRetries}) reached`);
+}
+
 router.get('/', async (req, res) => {
   await cleanupSession();
 
@@ -33,7 +53,6 @@ router.get('/', async (req, res) => {
     let conn = null;
     let qrSent = false;
 
-    // 2 minute timeout
     const qrTimeout = setTimeout(() => {
       if (!qrSent) {
         res.status(408).send('QR timeout');
@@ -42,78 +61,80 @@ router.get('/', async (req, res) => {
       }
     }, 120000);
 
-    conn = makeWASocket({
-      // Removed deprecated printQRInTerminal
-      logger: pino({ level: 'silent' }),
-      auth: {
-        creds: state.creds,
-        keys: state.keys,
-      },
-      browser: Browsers.ubuntu('Chrome'),
-      syncFullHistory: false,
-      version: [2, 2413, 1] // Stable version
-    });
+    const connectFn = async () => {
+      conn = makeWASocket({
+        logger: pino({ level: 'silent' }),
+        auth: {
+          creds: state.creds,
+          keys: state.keys,
+        },
+        browser: Browsers.ubuntu('Chrome'),
+        syncFullHistory: false,
+        version: [2, 2413, 1],
+        connectTimeoutMs: 30000,
+        keepAliveIntervalMs: 15000
+      });
 
-    conn.ev.on('connection.update', async (update) => {
-      const { qr, connection, lastDisconnect } = update;
+      conn.ev.on('connection.update', async (update) => {
+        const { qr, connection, lastDisconnect, isNewLogin } = update;
 
-      // Handle QR code generation
-      if (qr && !qrSent) {
-        try {
-          clearTimeout(qrTimeout);
-          qrSent = true;
-          console.log('Generating QR code...'); // Debug log
-          
-          const qrBuffer = await toBuffer(qr);
-          res.type('png').send(qrBuffer);
-        } catch (qrErr) {
-          console.error('QR generation error:', qrErr);
-          if (!res.headersSent) res.status(500).send('QR generation failed');
-        }
-      }
-
-      // Handle successful connection
-      if (connection === 'open') {
-        console.log('Connected successfully');
-        await delay(2000); // Short delay for stability
-
-        try {
-          // Save credentials explicitly
-          await saveCreds();
-          
-          const credsPath = path.join(SESSION_FOLDER, 'creds.json');
-          if (!fs.existsSync(credsPath)) {
-            throw new Error('creds.json not found');
+        if (qr && !qrSent) {
+          try {
+            clearTimeout(qrTimeout);
+            qrSent = true;
+            console.log('QR code generated');
+            const qrBuffer = await toBuffer(qr);
+            res.type('png').send(qrBuffer);
+          } catch (qrErr) {
+            console.error('QR generation error:', qrErr);
+            if (!res.headersSent) res.status(500).send('QR generation failed');
           }
-
-          // Send success message
-          await conn.sendMessage(conn.user.id, {
-            text: '✅ Connected successfully!\n\n' +
-                  '⚠️ Session established securely\n\n' +
-                  '🔒 Your credentials are saved in the session folder'
-          });
-
-          // Clean up
-          await conn.end();
-          await cleanupSession();
-        } catch (sendErr) {
-          console.error('Session error:', sendErr);
-          if (conn) conn.end();
-          await cleanupSession();
         }
-      }
 
-      // Handle disconnection
-      if (connection === 'close') {
-        console.log('Disconnected:', lastDisconnect?.error?.message || 'Unknown reason');
-        await cleanupSession();
-      }
-    });
+        if (connection === 'open') {
+          console.log('Connected successfully');
+          await delay(2000);
 
-    // Handle credentials updates
-    conn.ev.on('creds.update', saveCreds);
+          try {
+            await saveCreds();
+            const credsPath = path.join(SESSION_FOLDER, 'creds.json');
+            if (!fs.existsSync(credsPath)) {
+              throw new Error('creds.json not found');
+            }
 
-    // Handle client disconnection
+            await conn.sendMessage(conn.user.id, {
+              text: '✅ Connection established!\n\n' +
+                    '⚠️ Do not share your session data with anyone'
+            });
+
+            await conn.end();
+            await cleanupSession();
+          } catch (e) {
+            console.error('Post-connection error:', e);
+            if (conn) conn.end();
+            await cleanupSession();
+          }
+        }
+
+        if (connection === 'close') {
+          const error = lastDisconnect?.error;
+          console.log('Disconnected:', error?.message || 'Unknown reason');
+          if (error?.output?.statusCode !== 401) {
+            console.log('Attempting reconnect...');
+            await delay(5000);
+            await cleanupSession();
+            connectFn();
+          } else {
+            await cleanupSession();
+          }
+        }
+      });
+
+      conn.ev.on('creds.update', saveCreds);
+    };
+
+    await connectWithRetry(connectFn);
+
     req.on('close', () => {
       if (!qrSent && conn) {
         conn.end();
@@ -121,10 +142,10 @@ router.get('/', async (req, res) => {
       }
     });
 
-  } catch (initErr) {
-    console.error('Initialization error:', initErr);
+  } catch (err) {
+    console.error('Initialization error:', err);
     if (!res.headersSent) {
-      res.status(500).send('Initialization failed');
+      res.status(500).send('Connection failed: ' + err.message);
     }
     await cleanupSession();
   }
