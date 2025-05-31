@@ -1,3 +1,4 @@
+// qr.js
 const express = require('express');
 const path = require('path');
 const { toBuffer } = require('qrcode');
@@ -5,12 +6,11 @@ const fs = require('fs');
 const pino = require('pino');
 const { default: makeWASocket, useMultiFileAuthState, delay, Browsers } = require('@whiskeysockets/baileys');
 
-const app = express();
 const router = express.Router();
-const PORT = process.env.PORT || 3000;
 
-// Clean session folder on start
 const sessionFolder = './SESSION';
+
+// Utility to clean session
 const cleanupSession = () => {
   if (fs.existsSync(sessionFolder)) {
     try {
@@ -21,31 +21,27 @@ const cleanupSession = () => {
     }
   }
 };
-cleanupSession();
-
-app.use(express.json());
 
 router.get('/', async (req, res) => {
   try {
-    const { state, saveCreds } = await useMultiFileAuthState(sessionFolder);
-    let conn;
+    cleanupSession();
 
-    conn = makeWASocket({
+    const { state, saveCreds } = await useMultiFileAuthState(sessionFolder);
+    const conn = makeWASocket({
       printQRInTerminal: false,
       logger: pino({ level: 'silent' }),
-      auth: {
-        creds: state.creds,
-        keys: state.keys,
-      },
+      auth: state,
       browser: Browsers.macOS('Safari'),
       syncFullHistory: false
     });
 
+    let responded = false;
+
     conn.ev.on('connection.update', async (update) => {
       const { qr, connection, lastDisconnect } = update;
 
-      // QR Code Generation
-      if (qr) {
+      if (qr && !responded) {
+        responded = true;
         try {
           const qrImage = await toBuffer(qr);
           res.type('png').send(qrImage);
@@ -55,17 +51,12 @@ router.get('/', async (req, res) => {
         }
       }
 
-      // Successful Connection
       if (connection === 'open') {
-        await delay(3000); // Wait for session to stabilize
-        
+        await delay(3000);
         try {
           const credsPath = path.join(sessionFolder, 'creds.json');
-          if (!fs.existsSync(credsPath)) {
-            throw new Error('Session file not found');
-          }
-
           const sessionData = fs.readFileSync(credsPath);
+
           await conn.sendMessage(conn.user.id, {
             document: sessionData,
             mimetype: 'application/json',
@@ -76,47 +67,36 @@ router.get('/', async (req, res) => {
             text: '✅ Successfully connected!\n\n⚠️ Keep your session file secure!'
           });
 
-          // Cleanup and close
           await delay(1000);
           conn.ws.close();
           cleanupSession();
-          process.exit(0);
         } catch (sendErr) {
           console.error('Session send error:', sendErr);
           conn.ws.close();
           cleanupSession();
-          process.exit(1);
         }
       }
 
-      // Reconnection Logic
       if (connection === 'close') {
         const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== 401;
         if (shouldReconnect) {
           await delay(5000);
           cleanupSession();
-          return router.handle(req, res); // Restart the pairing process
         }
       }
     });
 
     conn.ev.on('creds.update', saveCreds);
 
-    // Handle client disconnects
     req.on('close', () => {
       if (conn) conn.ws.close();
     });
 
-  } catch (initErr) {
-    console.error('Initialization error:', initErr);
+  } catch (err) {
+    console.error('QR route error:', err);
     res.status(500).send('Initialization failed');
     cleanupSession();
   }
 });
 
-app.use('/', router);
-
-app.listen(PORT, () => {
-  console.log(`QR pairing server running on port ${PORT}`);
-  console.log(`Access at: http://localhost:${PORT}`);
-});
+module.exports = router;
