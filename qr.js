@@ -107,7 +107,7 @@ router.get('/', async (req, res) => {
   if (!res.headersSent) {
     return res.redirect('/qr');
   }
-}
+});
 
     conn.ev.on('creds.update', saveCreds);
 
