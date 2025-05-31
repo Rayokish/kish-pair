@@ -1,167 +1,309 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="shortcut icon" href="" type="image/x-icon">
-  <style>
-    body {
-      background-color: black;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      height: 100vh;
-      margin: 0;
-      color: white;
-    }
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>KISH MD Session Scanner</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+    <style>
+        :root {
+            --neon-green: #00ff9d;
+            --neon-blue: #00f2ff;
+            --neon-purple: #b400ff;
+            --dark-bg: #0a0a0a;
+        }
+        
+        body {
+            margin: 0;
+            height: 100vh;
+            background: var(--dark-bg);
+            overflow: hidden;
+            font-family: 'Share Tech Mono', monospace;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
 
-    {
-            "@context": "https://schema.org",
-            "@type": "Organization",
-            "url": "https://railway.app",
-            "logo": "https://files.catbox.moe/39z8jd.jpg"
-    }
+        .grid-overlay {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                linear-gradient(rgba(0, 255, 157, 0.05) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 255, 157, 0.05) 1px, transparent 1px);
+            background-size: 40px 40px;
+            z-index: 0;
+            opacity: 0.3;
+        }
 
-    .button-container {
-      text-align: center;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-    }
+        .cyber-container {
+            position: relative;
+            width: 300px;
+            height: 300px;
+            z-index: 2;
+        }
 
-    h3 {
-      margin-top: -40px;
-      opacity: 0;
-      animation: fadeIn 3s forwards;
-    }
+        .cyber-loader {
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
 
-    .button {
-      width: 140px;
-      height: 40px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 10px;
-      padding: 0px 15px;
-      background-color: red;
-      border-radius: 10px;
-      border: none;
-      color: white;
-      position: relative;
-      cursor: pointer;
-      font-weight: 900;
-      transition-duration: .2s;
-      background: linear-gradient(0deg, #000, #272727);
-      text-decoration: none;
-    }
+        .cyber-spinner {
+            width: 100%;
+            height: 100%;
+            border: 4px solid var(--neon-green);
+            border-radius: 50%;
+            position: relative;
+            animation: rotate 2s linear infinite;
+            box-shadow: 0 0 30px var(--neon-green);
+        }
 
-  
-    footer {
-    position: fixed;
-    bottom: 0;
-    width: 100%;
-    background-color: #222; /* Darker gray footer background */
-    color: #fff;
-    padding: 10px 0;
-    text-align: center;
-    font-size: 14px;
-    
-  }
-    .button:before, .button:after {
-      content: '';
-      position: absolute;
-      left: -2px;
-      top: -2px;
-      border-radius: 10px;
-      background: linear-gradient(45deg, #48ff00, #15ff00, #000000,#000000, #ff0000);
-      background-size: 400%;
-      width: calc(100% + 4px);
-      height: calc(100% + 4px);
-      z-index: -1;
-      animation: steam 10s linear infinite;
-    }
+        .cyber-spinner::before {
+            content: '';
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background: var(--neon-green);
+            top: -12px;
+            left: 50%;
+            transform: translateX(-50%);
+            border-radius: 50%;
+            box-shadow: 0 0 20px var(--neon-green);
+        }
 
-    @keyframes steam {
-      0% {
-        background-position: 0 0;
-      }
+        .scan-lines {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(to bottom,
+                transparent 50%,
+                rgba(0, 255, 157, 0.2) 51%,
+                transparent 52%);
+            background-size: 100% 4px;
+            animation: scan 0.5s linear infinite;
+            border-radius: 50%;
+        }
 
-      50% {
-        background-position: 400% 0;
-      }
+        .hud-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: var(--neon-green);
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.2rem;
+            text-align: center;
+            text-shadow: 0 0 10px var(--neon-green);
+            width: 100%;
+            letter-spacing: 2px;
+        }
 
-      100% {
-        background-position: 0 0;
-      }
-    }
+        .progress-container {
+            position: absolute;
+            bottom: 15%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 70%;
+            height: 4px;
+            background: rgba(0, 255, 157, 0.2);
+            border-radius: 2px;
+            overflow: hidden;
+        }
 
-    .button:after {
-      filter: blur(50px);
-    }
+        .progress-fill {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(to right, var(--neon-green), var(--neon-blue));
+            transition: width 0.1s linear;
+            box-shadow: 0 0 10px var(--neon-green);
+        }
 
-    .button span {
-      z-index: 1;
-    }
+        .status-text {
+            position: absolute;
+            bottom: 22%;
+            left: 50%;
+            transform: translateX(-50%);
+            color: var(--neon-green);
+            font-size: 0.8rem;
+            text-align: center;
+            width: 100%;
+            opacity: 0.8;
+        }
 
-    @keyframes fadeIn {
-      to {
-        opacity: 1;
-      }
-    }
-  </style>
+        .binary-rain {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            color: rgba(0, 255, 157, 0.1);
+            font-size: 16px;
+            line-height: 1.5;
+            z-index: 1;
+            overflow: hidden;
+            pointer-events: none;
+        }
+
+        .binary-column {
+            display: inline-block;
+            vertical-align: top;
+            width: 20px;
+            margin-right: 10px;
+            animation: binaryFall 10s linear infinite;
+            animation-delay: calc(var(--delay) * 1s);
+        }
+
+        .glow-effect {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at center, rgba(0, 255, 157, 0.1) 0%, transparent 70%);
+            animation: pulse 3s infinite alternate;
+            border-radius: 50%;
+            z-index: -1;
+        }
+
+        .cyber-border {
+            position: absolute;
+            width: calc(100% + 20px);
+            height: calc(100% + 20px);
+            top: -10px;
+            left: -10px;
+            border: 2px solid var(--neon-green);
+            border-radius: 50%;
+            box-shadow: 0 0 20px var(--neon-green);
+            opacity: 0.5;
+            pointer-events: none;
+        }
+
+        @keyframes rotate {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @keyframes scan {
+            0% { background-position: 0 0; }
+            100% { background-position: 0 100%; }
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 0.6; }
+        }
+
+        @keyframes binaryFall {
+            0% { transform: translateY(-100%); }
+            100% { transform: translateY(100vh); }
+        }
+
+        .redirect-notice {
+            position: absolute;
+            bottom: 10%;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(0, 255, 157, 0.7);
+            font-size: 0.7rem;
+            text-align: center;
+            width: 80%;
+            animation: blink 2s infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 1; }
+        }
+    </style>
 </head>
 <body>
-  <div class="button-container">
-    <h3>SELECT AN OPTION </h3>
-    <div></div>
-    <a href="/pair" class="button" target="_blank"> <span>PAIR CODE</span> </a> <br>
-    <a href="/qr" class="button" target="_blank"> <span>QR CODE</span> </a> <br>
-    <a href="https://github.com/Brashokish/Kish-MD/fork" class="button" target="_blank"> <span>FORK KISH-MD</span> </a> <br> </a>
-    <a href="https://whatsapp.com/channel/0029VabXGW8BKfhwAKCfBp0o" class="button" target="_blank"> <span>WhatsApp</span> </a> <br>
-
-    <p>FACE ANY ISSUES CLICK ERROR BUTTON</p>
-
-    <a href="https://wa.me/254796307638" class="button" target="_blank"> <span>ERROR</span> </a> <br>
-
-    <footer>
-     KISH-MD &copy; <span id="currentYear"></span>
-    </footer>
-  
-  <div id="clock"></div> <!-- Real-time clock will appear here -->
-
-
+    <div class="grid-overlay"></div>
+    
+    <div class="binary-rain" id="binaryRain"></div>
+    
+    <div class="cyber-container">
+        <div class="cyber-border"></div>
+        <div class="glow-effect"></div>
+        <div class="cyber-loader">
+            <div class="cyber-spinner"></div>
+            <div class="scan-lines"></div>
+            <div class="hud-text" id="hudText">SESSION SCANNER</div>
+            <div class="status-text" id="statusText">Initializing connection...</div>
+            <div class="progress-container">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+        </div>
+        <div class="redirect-notice">Preparing WhatsApp session scanner...</div>
+    </div>
 
     <script>
+        // Create binary rain effect
+        function createBinaryRain() {
+            const binaryRain = document.getElementById('binaryRain');
+            const columns = Math.floor(window.innerWidth / 30);
+            
+            for (let i = 0; i < columns; i++) {
+                const column = document.createElement('div');
+                column.className = 'binary-column';
+                column.style.setProperty('--delay', Math.random());
+                
+                // Create random binary characters
+                let binaryString = '';
+                const rows = Math.floor(window.innerHeight / 24) + 2;
+                for (let j = 0; j < rows; j++) {
+                    binaryString += Math.random() > 0.5 ? '1' : '0';
+                    binaryString += '<br>';
+                }
+                
+                column.innerHTML = binaryString;
+                binaryRain.appendChild(column);
+            }
+        }
 
-      // Function to display current time
+        // Status messages
+        const statusMessages = [
+            "Initializing connection...",
+            "Establishing secure channel...",
+            "Verifying credentials...",
+            "Connecting to WhatsApp API...",
+            "Preparing session scanner..."
+        ];
 
-      function updateTime() {
+        // Update progress and status
+        let progress = 0;
+        const progressFill = document.getElementById('progressFill');
+        const hudText = document.getElementById('hudText');
+        const statusText = document.getElementById('statusText');
+        let currentStatus = 0;
 
-        const now = new Date();
+        const updateProgress = () => {
+            progress += 1;
+            progressFill.style.width = `${progress}%`;
+            
+            // Update status text every 20% progress
+            if (progress % 20 === 0) {
+                currentStatus = (currentStatus + 1) % statusMessages.length;
+                statusText.textContent = statusMessages[currentStatus];
+            }
+            
+            // Update HUD text at 100%
+            if (progress >= 100) {
+                hudText.textContent = "SCANNER READY";
+                statusText.textContent = "Redirecting to session scanner...";
+                clearInterval(progressInterval);
+            }
+        };
 
-        const hours = now.getHours().toString().padStart(2, '0');
+        const progressInterval = setInterval(updateProgress, 30);
 
-        const minutes = now.getMinutes().toString().padStart(2, '0');
+        // Initialize effects
+        createBinaryRain();
 
-        const seconds = now.getSeconds().toString().padStart(2, '0');
+        // Redirect after 4 seconds
+        setTimeout(() => {
+            window.location.href = 'https://kish-pair.onrender.com';
+        }, 4000);
 
-        const time = `${hours}:${minutes}:${seconds}`;
-
-        
-
-        // Update the clock in the DOM
-
-        document.getElementById('clock').innerText = time;
-
-      }
-
-
-
-      // Update the clock every second
-
-      setInterval(updateTime, 1000);
-
-      updateTime(); 
-      </script>
-</body>
-</html>
+        // Allow click/tap to redirect immediately
+        document.addEventListener('click', () => {
+            clearInterval(progressInterval);
