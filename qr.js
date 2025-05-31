@@ -8,11 +8,18 @@ const {
   default: makeWASocket,
   useMultiFileAuthState,
   delay,
-  Browsers
+  Browsers,
+  fetchLatestBaileysVersion
 } = require('@whiskeysockets/baileys');
 
 const SESSION_FOLDER = './SESSION';
 
+// Ensure session folder exists
+if (!fs.existsSync(SESSION_FOLDER)) {
+  fs.mkdirSync(SESSION_FOLDER);
+}
+
+// Clean session directory
 const cleanupSession = async () => {
   if (fs.existsSync(SESSION_FOLDER)) {
     try {
@@ -24,8 +31,10 @@ const cleanupSession = async () => {
   }
 };
 
+// Retry connection handler
 async function connectWithRetry(connectFn, maxRetries = 3, retryDelay = 5000) {
   let retries = 0;
+
   while (retries < maxRetries) {
     try {
       return await connectFn();
@@ -39,12 +48,16 @@ async function connectWithRetry(connectFn, maxRetries = 3, retryDelay = 5000) {
       }
     }
   }
+
   throw new Error(`Max retries (${maxRetries}) reached`);
 }
 
 router.get('/', async (req, res) => {
+  await cleanupSession();
+
   try {
     const { state, saveCreds } = await useMultiFileAuthState(SESSION_FOLDER);
+    const { version } = await fetchLatestBaileysVersion();
     let conn = null;
     let qrSent = false;
 
@@ -61,8 +74,8 @@ router.get('/', async (req, res) => {
         logger: pino({ level: 'silent' }),
         auth: state,
         browser: Browsers.ubuntu('Chrome'),
+        version,
         syncFullHistory: false,
-        version: [2, 2413, 1],
         connectTimeoutMs: 30000,
         keepAliveIntervalMs: 15000
       });
@@ -95,10 +108,9 @@ router.get('/', async (req, res) => {
             }
 
             await conn.sendMessage(conn.user.id, {
-              text: '✅ Connection established!\n\n⚠️ Do not share your session data with anyone'
+              text: '✅ Connection established!\n\n⚠️ Do not share your session data with anyone.'
             });
 
-            await delay(3000);
             await conn.end();
             await cleanupSession();
           } catch (e) {
@@ -110,7 +122,7 @@ router.get('/', async (req, res) => {
 
         if (connection === 'close') {
           const error = lastDisconnect?.error;
-          console.log('Disconnected:', error?.message || 'Unknown reason');
+          console.log('Disconnected:', error?.stack || error?.message || 'Unknown reason');
           if (error?.output?.statusCode !== 401) {
             console.log('Attempting reconnect...');
             await delay(5000);
