@@ -112,12 +112,12 @@ router.get('/', async (req, res) => {
     conn.ev.on('creds.update', saveCreds);
 
     req.on('close', () => {
-      if (!qrSent) {
-        clearTimeout(qrTimeout);
-        if (conn) conn.ws.close();
-        cleanupSession();
-      }
-    });
+  if (!qrSent) {
+    clearTimeout(qrTimeout);
+    if (conn) conn.ws.close();
+    cleanupSession();
+  }
+});
 
   } catch (initErr) {
     console.error('Initialization error:', initErr);
