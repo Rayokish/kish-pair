@@ -3,7 +3,6 @@ const router = express.Router();
 const fs = require('fs');
 const path = require('path');
 const pino = require('pino');
-const QRCode = require('qrcode');
 const { toBuffer } = require('qrcode');
 
 const {
@@ -13,119 +12,102 @@ const {
 } = require('@whiskeysockets/baileys');
 
 // Clear session on startup
-const clearSession = () => {
-  const sessionFolder = path.join(__dirname, 'SESSION');
-  if (fs.existsSync(sessionFolder)) {
-    try {
-      fs.rmSync(sessionFolder, { recursive: true, force: true });
-      console.log('Session folder cleared');
-    } catch (err) {
-      console.error('Error clearing session:', err);
-    }
-  }
-};
-clearSession();
+const sessionFolder = path.join(__dirname, 'SESSION');
+if (fs.existsSync(sessionFolder)) {
+  fs.rmSync(sessionFolder, { recursive: true, force: true });
+}
 
 router.get('/qr-api', async (req, res) => {
   try {
     const { state, saveCreds } = await useMultiFileAuthState('./SESSION');
 
     const sock = makeWASocket({
-      printQRInTerminal: true, // Enable terminal QR for debugging
-      logger: pino({ level: 'silent' }),
+      printQRInTerminal: true, // For debugging
+      logger: pino({ level: 'fatal' }),
       auth: state,
       browser: Browsers.macOS('Safari'),
     });
 
-    let qrGenerated = false;
-    let connectionTimeout;
-
-    const cleanup = () => {
-      clearTimeout(connectionTimeout);
-      if (sock.ws && sock.ws.readyState !== sock.ws.CLOSED) {
-        sock.ws.close();
-      }
-    };
+    let qrSent = false;
 
     sock.ev.on('connection.update', async (update) => {
-      const { connection, qr } = update;
+      const { connection, qr, lastDisconnect } = update;
 
-      if (qr && !qrGenerated) {
-        qrGenerated = true;
-        clearTimeout(connectionTimeout);
-
+      // Send QR code
+      if (qr && !qrSent) {
+        qrSent = true;
         try {
-          const qrImage = await QRCode.toDataURL(qr);
-          res.json({
-            status: 'QR_READY',
-            qr: qrImage,
-            message: 'Scan the QR code to connect'
+          const qrImageBuffer = await toBuffer(qr);
+          res.writeHead(200, {
+            'Content-Type': 'image/png',
+            'Content-Length': qrImageBuffer.length,
           });
-        } catch (qrError) {
-          console.error('QR generation error:', qrError);
-          res.status(500).json({ 
-            status: 'ERROR',
-            message: 'Failed to generate QR code'
-          });
-          cleanup();
+          res.end(qrImageBuffer);
+        } catch (error) {
+          console.error('QR generation failed:', error);
+          if (!res.headersSent) {
+            res.status(500).send('QR generation failed');
+          }
+          sock.ws.close();
         }
       }
 
+      // After successful connection
       if (connection === 'open') {
-        cleanup();
-        // Connection established, you can add your logic here
+        const credsPath = path.join(__dirname, 'SESSION', 'creds.json');
+        
+        if (fs.existsSync(credsPath)) {
+          try {
+            // Read the credentials file
+            const credsData = fs.readFileSync(credsPath, 'utf8');
+            const sessionInfo = JSON.parse(credsData);
+            
+            // Send to the user who scanned
+            await sock.sendMessage(sock.user.id, { 
+              text: `Here is your session credentials:\n\n${credsData}\n\nKeep this safe!`
+            });
+            
+            // Optional: Send as a file attachment
+            await sock.sendMessage(sock.user.id, {
+              document: fs.readFileSync(credsPath),
+              fileName: 'creds.json',
+              mimetype: 'application/json'
+            });
+            
+            console.log('Session credentials sent to:', sock.user.id);
+          } catch (sendError) {
+            console.error('Failed to send credentials:', sendError);
+            await sock.sendMessage(sock.user.id, { 
+              text: 'Failed to send session credentials. Please try again.'
+            });
+          }
+        }
+        
+        // Close connection
+        sock.ws.close();
+      }
+
+      // Handle connection errors
+      if (connection === 'close' && lastDisconnect?.error?.output?.statusCode !== 401) {
+        sock.end();
       }
     });
 
     sock.ev.on('creds.update', saveCreds);
 
-    // Connection timeout (30 seconds)
-    connectionTimeout = setTimeout(() => {
-      if (!qrGenerated) {
-        res.status(408).json({
-          status: 'TIMEOUT',
-          message: 'QR generation timed out'
-        });
-        cleanup();
+    // Timeout handling
+    setTimeout(() => {
+      if (!qrSent && !res.headersSent) {
+        res.status(408).send('QR code generation timeout');
+        sock.ws.close();
       }
     }, 30000);
 
-    // Handle client disconnect
-    req.on('close', cleanup);
-
   } catch (error) {
-    console.error('Connection error:', error);
-    res.status(500).json({
-      status: 'ERROR',
-      message: 'Internal server error'
-    });
-  }
-});
-
-// Endpoint to check session status
-router.get('/session-status', async (req, res) => {
-  try {
-    const credsPath = path.join(__dirname, 'SESSION', 'creds.json');
-    
-    if (!fs.existsSync(credsPath)) {
-      return res.json({ 
-        status: 'NO_SESSION',
-        connected: false
-      });
+    console.error('Error in /qr-api:', error);
+    if (!res.headersSent) {
+      res.status(500).send({ error: error.message });
     }
-
-    const creds = JSON.parse(fs.readFileSync(credsPath, 'utf-8'));
-    res.json({
-      status: 'SESSION_EXISTS',
-      connected: true,
-      sessionId: creds.me.id
-    });
-  } catch (error) {
-    console.error('Session check error:', error);
-    res.status(500).json({
-      status: 'ERROR',
-      message: 'Failed to check session'
-    });
   }
 });
 
