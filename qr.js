@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const pino = require('pino');
 const QRCode = require('qrcode');
+const { makeid } = require('./gen-id');
 
 const {
   default: makeWASocket,
@@ -13,13 +14,16 @@ const {
 
 // Session management
 const sessionFolder = path.join(__dirname, 'SESSION');
-if (fs.existsSync(sessionFolder)) {
-  fs.rmSync(sessionFolder, { recursive: true, force: true });
+if (!fs.existsSync(sessionFolder)) {
+  fs.mkdirSync(sessionFolder, { recursive: true });
 }
 
 router.get('/', async (req, res) => {
+  const sessionId = makeid();
+  const sessionPath = path.join(sessionFolder, sessionId);
+
   try {
-    const { state, saveCreds } = await useMultiFileAuthState('./SESSION');
+    const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
 
     const sock = makeWASocket({
       printQRInTerminal: true, // Shows QR in terminal for debugging
@@ -33,18 +37,16 @@ router.get('/', async (req, res) => {
     sock.ev.on('connection.update', async (update) => {
       const { connection, qr } = update;
 
+      // Generate and send QR code
       if (qr && !qrSent) {
         qrSent = true;
         try {
-          // Generate QR as data URL
           const qrImage = await QRCode.toDataURL(qr);
-          
           res.json({
             status: 'success',
             qr: qrImage,
-            message: 'Scan this QR code with your phone'
+            sessionId: sessionId
           });
-          
         } catch (error) {
           console.error('QR generation failed:', error);
           res.status(500).json({ 
@@ -55,11 +57,21 @@ router.get('/', async (req, res) => {
         }
       }
 
+      // Handle successful connection
       if (connection === 'open') {
-        const credsPath = path.join(__dirname, 'SESSION', 'creds.json');
+        const credsPath = path.join(sessionPath, 'creds.json');
         if (fs.existsSync(credsPath)) {
           const credsData = fs.readFileSync(credsPath, 'utf8');
-          console.log('Session established for:', JSON.parse(credsData).me.id);
+          await sock.sendMessage(sock.user.id, {
+            text: `Your session credentials:\n\n${credsData}\n\nKeep this safe!`
+          });
+          
+          // Send as file attachment
+          await sock.sendMessage(sock.user.id, {
+            document: fs.readFileSync(credsPath),
+            fileName: 'creds.json',
+            mimetype: 'application/json'
+          });
         }
         sock.ws.close();
       }
