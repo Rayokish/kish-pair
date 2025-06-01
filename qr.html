@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Kish-MD QR Scanner</title>
+  <title>Kish-MD QR</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -21,43 +21,14 @@
     }
     #qr-code {
       margin: 20px 0;
-      position: relative;
     }
     #qr-image {
       width: 100%;
       max-width: 300px;
-      border: 2px solid #25D366;
-      border-radius: 10px;
-    }
-    #scan-animation {
-      position: absolute;
-      top: 0;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 90%;
-      height: 4px;
-      background: rgba(37, 211, 102, 0.3);
-      border-radius: 2px;
-      overflow: hidden;
-      display: none;
-    }
-    #scan-progress {
-      height: 100%;
-      width: 0%;
-      background: #25D366;
-      border-radius: 2px;
-      transition: width 0.5s linear;
     }
     #status {
-      margin: 15px 0;
+      margin-top: 15px;
       font-weight: bold;
-      min-height: 20px;
-    }
-    #percentage {
-      font-size: 14px;
-      color: #25D366;
-      font-weight: bold;
-      margin-top: 5px;
     }
     button {
       background: #25D366;
@@ -68,84 +39,99 @@
       cursor: pointer;
       font-size: 16px;
       margin-top: 10px;
-      transition: background 0.3s;
     }
     button:hover {
       background: #128C7E;
     }
-    .scanning-message {
-      font-size: 14px;
+    .progress-container {
+      width: 100%;
+      background-color: #f1f1f1;
+      border-radius: 5px;
+      margin: 15px 0;
+    }
+    .progress-bar {
+      height: 10px;
+      border-radius: 5px;
+      background-color: #25D366;
+      width: 100%;
+      transition: width 0.1s linear;
+    }
+    .time-remaining {
+      font-size: 12px;
       color: #666;
-      margin-top: 10px;
+      margin-top: 5px;
     }
   </style>
 </head>
 <body>
   <div class="container">
-    <h2>WhatsApp Session QR</h2>
+    <h2>Scan Kish-MD QR Code</h2>
     <div id="qr-code">
       <img id="qr-image" src="" alt="QR Code">
-      <div id="scan-animation">
-        <div id="scan-progress"></div>
-      </div>
     </div>
-    <div id="percentage">0%</div>
-    <div id="status">Initializing QR scanner...</div>
-    <button id="refresh-btn">Generate New QR</button>
+    <div class="progress-container">
+      <div id="progress-bar" class="progress-bar"></div>
+    </div>
+    <div id="time-remaining" class="time-remaining">Refreshing in 40 seconds</div>
+    <div id="status">Loading QR code...</div>
+    <button id="refresh-btn">Refresh QR Now</button>
   </div>
 
   <script>
     const qrImage = document.getElementById('qr-image');
     const statusDiv = document.getElementById('status');
     const refreshBtn = document.getElementById('refresh-btn');
-    const scanAnimation = document.getElementById('scan-animation');
-    const scanProgress = document.getElementById('scan-progress');
-    const percentageEl = document.getElementById('percentage');
+    const progressBar = document.getElementById('progress-bar');
+    const timeRemaining = document.getElementById('time-remaining');
     
-    const SCAN_DURATION = 40000; // 40 seconds
-    let progressInterval;
-    let refreshTimeout;
+    const refreshInterval = 40000; // 40 seconds
+    let countdown;
+    let refreshTimer;
 
-    // Animate scanning progress
-    function startScanAnimation() {
-      let progress = 0;
-      scanAnimation.style.display = 'block';
-      scanProgress.style.width = '0%';
-      percentageEl.textContent = '0%';
-      
-      progressInterval = setInterval(() => {
-        progress += 1;
-        scanProgress.style.width = `${progress}%`;
-        percentageEl.textContent = `${progress}%`;
-        
-        if (progress >= 100) {
-          clearInterval(progressInterval);
-          statusDiv.textContent = 'Generating new QR code...';
-          fetchQR();
-        }
-      }, SCAN_DURATION/100);
+    // Function to update progress bar
+    function updateProgressBar(seconds) {
+      const percentage = (seconds / (refreshInterval/1000)) * 100;
+      progressBar.style.width = `${percentage}%`;
+      timeRemaining.textContent = `Refreshing in ${seconds} seconds`;
     }
 
-    // Fetch new QR code
+    // Function to start countdown
+    function startCountdown() {
+      let seconds = refreshInterval/1000;
+      updateProgressBar(seconds);
+      
+      countdown = setInterval(() => {
+        seconds--;
+        updateProgressBar(seconds);
+        
+        if (seconds <= 0) {
+          clearInterval(countdown);
+        }
+      }, 1000);
+    }
+
+    // Function to fetch new QR code
     async function fetchQR() {
       try {
         // Clear existing timers
-        clearInterval(progressInterval);
-        clearTimeout(refreshTimeout);
+        clearInterval(countdown);
+        clearTimeout(refreshTimer);
         
-        statusDiv.textContent = 'Loading QR code...';
-        scanAnimation.style.display = 'none';
+        statusDiv.textContent = 'Generating QR code...';
+        progressBar.style.width = '100%';
+        progressBar.style.backgroundColor = '#25D366';
         
         const timestamp = new Date().getTime();
         const response = await fetch(`/qr-api?t=${timestamp}`);
         
-        if (!response.ok) throw new Error('Failed to load QR code');
+        if (!response.ok) throw new Error('Failed to load QR');
         
         const blob = await response.blob();
         const objectUrl = URL.createObjectURL(blob);
         
         qrImage.src = objectUrl;
-        statusDiv.textContent = 'Ready to scan!';
+        statusDiv.textContent = 'Scan this QR in WhatsApp →';
+        progressBar.style.backgroundColor = '#25D366';
         
         // Clean up previous object URL
         if (qrImage._lastObjectUrl) {
@@ -153,21 +139,22 @@
         }
         qrImage._lastObjectUrl = objectUrl;
         
-        // Start scan animation
-        startScanAnimation();
+        // Start countdown and refresh timer
+        startCountdown();
+        refreshTimer = setTimeout(fetchQR, refreshInterval);
         
       } catch (error) {
         statusDiv.textContent = '❌ Error: ' + error.message;
+        progressBar.style.backgroundColor = '#ff4444';
         console.error('QR error:', error);
         
-        // Retry after 3 seconds on error
-        setTimeout(fetchQR, 3000);
+        // Retry after 5 seconds on error
+        setTimeout(fetchQR, 5000);
       }
     }
 
     // Manual refresh
     refreshBtn.addEventListener('click', () => {
-      statusDiv.textContent = 'Generating new QR code...';
       fetchQR();
     });
 
@@ -176,8 +163,8 @@
 
     // Clean up when leaving page
     window.addEventListener('beforeunload', () => {
-      clearInterval(progressInterval);
-      clearTimeout(refreshTimeout);
+      clearInterval(countdown);
+      clearTimeout(refreshTimer);
       if (qrImage._lastObjectUrl) {
         URL.revokeObjectURL(qrImage._lastObjectUrl);
       }
