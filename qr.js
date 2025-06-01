@@ -11,7 +11,7 @@ const {
   Browsers,
 } = require('@whiskeysockets/baileys');
 
-const sessionFolder = path.join(__dirname, 'SESSION');
+const sessionFolder = path.join(process.cwd(), 'SESSION');
 
 // Ensure session directory exists
 function ensureSessionFolder() {
@@ -20,20 +20,35 @@ function ensureSessionFolder() {
   }
 }
 
+// Connection state management
+let activeSocket = null;
+let isSendingCreds = false;
+
 router.get('/', async (req, res) => {
-  ensureSessionFolder(); // Ensure folder exists before starting
+  ensureSessionFolder();
 
   try {
+    // Clean up previous connection if exists
+    if (activeSocket) {
+      try {
+        activeSocket.ws.close();
+      } catch (e) {
+        console.log('Cleanup of previous connection:', e.message);
+      }
+    }
+
     const { state, saveCreds } = await useMultiFileAuthState(sessionFolder);
 
     const sock = makeWASocket({
       logger: pino({ level: 'silent' }),
       auth: state,
       browser: Browsers.macOS('Safari'),
+      markOnlineOnConnect: false,
+      syncFullHistory: false,
     });
 
+    activeSocket = sock;
     let qrSent = false;
-    let credsSent = false;
 
     sock.ev.on('connection.update', async (update) => {
       const { connection, qr, lastDisconnect } = update;
@@ -53,50 +68,28 @@ router.get('/', async (req, res) => {
           if (!res.headersSent) {
             res.status(500).send('Failed to generate QR');
           }
-          sock.ws.close();
+          safeClose(sock);
         }
       }
 
       // Handle Successful Connection
-      if (connection === 'open' && !credsSent) {
-        credsSent = true;
-        const credsPath = path.join(sessionFolder, 'creds.json');
+      if (connection === 'open' && !isSendingCreds) {
+        isSendingCreds = true;
         
-        // Wait briefly for file to be created
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        if (fs.existsSync(credsPath)) {
-          try {
-            // Verify file is not empty
-            const stats = fs.statSync(credsPath);
-            if (stats.size > 0) {
-              await sock.sendMessage(sock.user.id, {
-                text: '✅ Session connected successfully!'
-              });
-              
-              await sock.sendMessage(sock.user.id, {
-                document: fs.readFileSync(credsPath),
-                fileName: `creds.json`,
-                mimetype: 'application/json',
-                caption: 'Your WhatsApp session credentials'
-              });
-            }
-          } catch (sendError) {
-            console.error('Failed to send credentials:', sendError);
-          }
+        try {
+          await sendCredentials(sock);
+        } catch (error) {
+          console.error('Failed to send credentials:', error);
+        } finally {
+          setTimeout(() => safeClose(sock), 2000);
+          isSendingCreds = false;
         }
-        
-        // Graceful shutdown
-        setTimeout(() => {
-          if (sock.ws.readyState !== sock.ws.CLOSED) {
-            sock.ws.close();
-          }
-        }, 2000);
       }
 
       // Handle Disconnection
       if (connection === 'close') {
-        // Optional: Add reconnection logic here if needed
+        console.log('Connection closed:', lastDisconnect?.error?.message);
+        activeSocket = null;
       }
     });
 
@@ -106,16 +99,75 @@ router.get('/', async (req, res) => {
     setTimeout(() => {
       if (!qrSent && !res.headersSent) {
         res.status(408).send('QR generation timed out');
-        sock.ws.close();
+        safeClose(sock);
       }
     }, 30000);
 
   } catch (error) {
-    console.error('Error:', error);
+    console.error('Initialization error:', error);
     if (!res.headersSent) {
       res.status(500).send('Internal server error');
     }
+    safeClose(activeSocket);
   }
 });
+
+// Helper function to safely close socket
+function safeClose(sock) {
+  try {
+    if (sock && sock.ws && sock.ws.readyState !== sock.ws.CLOSED) {
+      sock.ws.close();
+    }
+  } catch (e) {
+    console.log('Safe close error:', e.message);
+  }
+  activeSocket = null;
+}
+
+// Helper function to send credentials
+async function sendCredentials(sock) {
+  const credsPath = path.join(sessionFolder, 'creds.json');
+  
+  // Wait for file to be created
+  await new Promise(resolve => {
+    const checkFile = () => {
+      if (fs.existsSync(credsPath)) {
+        const stats = fs.statSync(credsPath);
+        if (stats.size > 0) return resolve();
+      }
+      setTimeout(checkFile, 500);
+    };
+    checkFile();
+  });
+
+  // Verify connection is still active
+  if (!sock || !sock.user?.id) {
+    throw new Error('Connection not active');
+  }
+
+  // Send messages with retry logic
+  await retrySend(sock, {
+    text: '✅ Session connected successfully!'
+  });
+
+  await retrySend(sock, {
+    document: fs.readFileSync(credsPath),
+    fileName: `whatsapp_creds_${Date.now()}.json`,
+    mimetype: 'application/json',
+    caption: 'Your WhatsApp session credentials'
+  });
+}
+
+// Helper function with retry logic
+async function retrySend(sock, message, maxRetries = 3) {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await sock.sendMessage(sock.user.id, message);
+    } catch (error) {
+      if (i === maxRetries - 1) throw error;
+      await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
+    }
+  }
+}
 
 module.exports = router;
