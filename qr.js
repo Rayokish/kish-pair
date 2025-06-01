@@ -34,11 +34,12 @@ router.get('/qr-api', async (req, res) => {
     });
 
     let sentQR = false;
+    let isConnected = false;
 
     sock.ev.on('connection.update', async (update) => {
       const { connection, qr, lastDisconnect } = update;
 
-      if (qr && !sentQR) {
+      if (qr && !sentQR && !isConnected) {
         sentQR = true; // only send once
 
         // Convert QR string to PNG buffer
@@ -52,17 +53,18 @@ router.get('/qr-api', async (req, res) => {
       }
 
       if (connection === 'open') {
+        isConnected = true;
         const credsPath = path.join(__dirname, 'SESSION', 'creds.json');
 
         if (fs.existsSync(credsPath)) {
-          const credsData = fs.readFileSync(credsPath);
-
-          // You can decide whether you want to send creds here or not,
-          // but the response to /qr-api should be ended already after sending QR image.
-          // So no further res.send() here to avoid errors.
+          const credsData = fs.readFileSync(credsPath, 'utf8');
+          const sessionId = JSON.parse(credsData);
+          
+          // You might want to store this session ID in a database or send it to the client
+          console.log('Session ID (creds.json):', sessionId);
         }
 
-        // Once connected, you can close the socket if you want:
+        // Once connected, close the socket
         sock.ws.close();
       }
 
@@ -87,6 +89,25 @@ router.get('/qr-api', async (req, res) => {
   } catch (error) {
     console.error('Error in /qr-api:', error);
     if (!res.headersSent) res.status(500).send({ error: error.message });
+  }
+});
+
+// New endpoint to get the session ID (creds.json)
+router.get('/session-id', (req, res) => {
+  try {
+    const credsPath = path.join(__dirname, 'SESSION', 'creds.json');
+    
+    if (!fs.existsSync(credsPath)) {
+      return res.status(404).send({ error: 'Session not established yet' });
+    }
+
+    const credsData = fs.readFileSync(credsPath, 'utf8');
+    const sessionId = JSON.parse(credsData);
+    
+    res.send({ sessionId });
+  } catch (error) {
+    console.error('Error in /session-id:', error);
+    res.status(500).send({ error: error.message });
   }
 });
 
