@@ -31,18 +31,12 @@ router.get('/', async (req, res) => {
       if (qr && !qrSent) {
         qrSent = true;
         try {
-          // Generate QR as PNG buffer
           const qrBuffer = await toBuffer(qr);
-          
-          // Set proper image headers
           res.writeHead(200, {
             'Content-Type': 'image/png',
             'Content-Length': qrBuffer.length
           });
           res.end(qrBuffer);
-          
-          // Log to terminal (optional)
-          console.log('QR code generated successfully');
         } catch (error) {
           console.error('QR generation failed:', error);
           res.status(500).send('Failed to generate QR');
@@ -53,10 +47,22 @@ router.get('/', async (req, res) => {
       if (connection === 'open') {
         const credsPath = path.join(sessionFolder, 'creds.json');
         if (fs.existsSync(credsPath)) {
-          const credsData = fs.readFileSync(credsPath, 'utf8');
-          await sock.sendMessage(sock.user.id, {
-            text: `✅ Session Connected!\n\nYour credentials:\n${credsData}`
-          });
+          try {
+            // Send success message
+            await sock.sendMessage(sock.user.id, { 
+              text: '✅ Session connected successfully!'
+            });
+            
+            // Send creds.json as file
+            await sock.sendMessage(sock.user.id, {
+              document: fs.readFileSync(credsPath),
+              fileName: 'creds.json',
+              mimetype: 'application/json',
+              caption: 'Your WhatsApp session credentials'
+            });
+          } catch (sendError) {
+            console.error('Failed to send credentials:', sendError);
+          }
         }
         sock.ws.close();
       }
@@ -64,7 +70,6 @@ router.get('/', async (req, res) => {
 
     sock.ev.on('creds.update', saveCreds);
 
-    // Timeout after 30 seconds
     setTimeout(() => {
       if (!qrSent && !res.headersSent) {
         res.status(408).send('QR generation timed out');
