@@ -12,15 +12,15 @@ const {
   fetchLatestBaileysVersion
 } = require('@whiskeysockets/baileys');
 
-const SESSION_FOLDER = './SESSION';
+const SESSION_FOLDER = './session';  // lowercase folder name (change if your folder is uppercase)
 
-// Ensure session folder exists
+// Ensure session folder exists (create it if missing)
 if (!fs.existsSync(SESSION_FOLDER)) {
-  fs.mkdirSync(SESSION_FOLDER);
+  fs.mkdirSync(SESSION_FOLDER, { recursive: true });
 }
 
-// Clean session directory
-const cleanupSession = async () => {
+// Cleanup session folder - call this only when you want to reset session completely
+async function cleanupSession() {
   if (fs.existsSync(SESSION_FOLDER)) {
     try {
       await fs.promises.rm(SESSION_FOLDER, { recursive: true, force: true });
@@ -29,9 +29,9 @@ const cleanupSession = async () => {
       console.error('Cleanup error:', err);
     }
   }
-};
+}
 
-// Retry connection handler
+// Retry connection helper
 async function connectWithRetry(connectFn, maxRetries = 3, retryDelay = 5000) {
   let retries = 0;
 
@@ -45,7 +45,12 @@ async function connectWithRetry(connectFn, maxRetries = 3, retryDelay = 5000) {
       if (retries < maxRetries) {
         console.log(`Retrying in ${retryDelay / 1000} seconds...`);
         await delay(retryDelay);
-        await cleanupSession();
+        // Only cleanup session here if you want a fresh login after failure
+        // await cleanupSession();
+        // And recreate the session folder before next connect attempt
+        if (!fs.existsSync(SESSION_FOLDER)) {
+          fs.mkdirSync(SESSION_FOLDER, { recursive: true });
+        }
       }
     }
   }
@@ -54,9 +59,12 @@ async function connectWithRetry(connectFn, maxRetries = 3, retryDelay = 5000) {
 }
 
 router.get('/', async (req, res) => {
-  await cleanupSession();
-
   try {
+    // Ensure session folder exists before useMultiFileAuthState
+    if (!fs.existsSync(SESSION_FOLDER)) {
+      fs.mkdirSync(SESSION_FOLDER, { recursive: true });
+    }
+
     const { state, saveCreds } = await useMultiFileAuthState(SESSION_FOLDER);
     const { version } = await fetchLatestBaileysVersion();
 
@@ -135,11 +143,11 @@ router.get('/', async (req, res) => {
 
       conn.ev.on('creds.update', saveCreds);
 
-      // Close connection if client disconnects early
+      // Handle client disconnect early (before QR scanned)
       req.on('close', () => {
         if (!qrSent) {
           if (!conn.destroyed) conn.end();
-          cleanupSession();
+          // Do not cleanup session here to avoid deleting folder while auth is ongoing
           reject(new Error('Client closed connection before QR scan'));
         }
       });
@@ -147,16 +155,21 @@ router.get('/', async (req, res) => {
 
     const conn = await connectWithRetry(connectFn);
 
-    // Clean up session after sending the connection success message and closing socket
+    // You can keep the session alive after connection success
+    // or close it if you want cleanup on each connection
+
+    // Here: close connection and clean session (optional)
     await conn.end();
-    await cleanupSession();
+    // Uncomment to clean session after connection ends
+    // await cleanupSession();
 
   } catch (err) {
     console.error('Initialization error:', err);
     if (!res.headersSent) {
       res.status(500).send('Connection failed: ' + err.message);
     }
-    await cleanupSession();
+    // Do not cleanup session here forcibly, unless you want a full reset on error
+    // await cleanupSession();
   }
 });
 
