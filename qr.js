@@ -1,64 +1,110 @@
 const express = require('express');
 const router = express.Router();
-const { default: makeWASocket, useSingleFileAuthState, Browsers } = require('@whiskeysockets/baileys');
-const P = require('pino');
+const fs = require('fs');
+const path = require('path');
+const pino = require('pino');
 const QRCode = require('qrcode');
 
-const logger = P({ level: 'silent' });
+const {
+  default: makeWASocket,
+  useMultiFileAuthState,
+  Browsers,
+} = require('@whiskeysockets/baileys');
 
-const authFile = './qr-session.json';
-const { state, saveCreds } = useSingleFileAuthState(authFile);
+// Session folder path
+const sessionFolder = path.join(__dirname, 'SESSION');
 
-let sock;
+// Ensure SESSION directory exists
+if (!fs.existsSync(sessionFolder)) {
+  fs.mkdirSync(sessionFolder, { recursive: true });
+}
 
-async function connectSocket() {
-    if (sock) return sock;
+router.get('/', async (req, res) => {
+  try {
+    const { state, saveCreds } = await useMultiFileAuthState(sessionFolder);
 
-    sock = makeWASocket({
-        auth: state,
-        printQRInTerminal: false,
-        logger,
-        browser: Browsers.macOS('Safari'),
-        syncFullHistory: false
+    const sock = makeWASocket({
+      printQRInTerminal: true, // Helps debugging
+      logger: pino({ level: 'fatal' }),
+      auth: state,
+      browser: Browsers.macOS('Safari'),
+    });
+
+    let qrSent = false;
+
+    sock.ev.on('connection.update', async (update) => {
+      const { connection, qr } = update;
+
+      // Send QR code
+      if (qr && !qrSent) {
+        qrSent = true;
+        try {
+          const qrImage = await QRCode.toDataURL(qr);
+          res.json({
+            status: 'success',
+            qr: qrImage,
+            message: 'Scan this QR code to connect'
+          });
+        } catch (error) {
+          console.error('QR generation failed:', error);
+          res.status(500).json({ 
+            status: 'error',
+            message: 'Failed to generate QR code'
+          });
+          sock.ws.close();
+        }
+      }
+
+      // On successful connection
+      if (connection === 'open') {
+        const credsPath = path.join(sessionFolder, 'creds.json');
+        
+        if (fs.existsSync(credsPath)) {
+          try {
+            const credsData = fs.readFileSync(credsPath, 'utf8');
+            const sessionId = JSON.parse(credsData).me.id; // Extract WhatsApp ID from creds.json
+
+            // Send session info to user
+            await sock.sendMessage(sock.user.id, {
+              text: `✅ Connected!\n\nYour Session ID:\n${sessionId}\n\nKeep this safe!`
+            });
+
+            // Optional: Send creds.json as a file
+            await sock.sendMessage(sock.user.id, {
+              document: fs.readFileSync(credsPath),
+              fileName: 'creds.json',
+              mimetype: 'application/json'
+            });
+
+          } catch (error) {
+            console.error('Failed to send session info:', error);
+          }
+        }
+
+        sock.ws.close(); // Disconnect after saving session
+      }
     });
 
     sock.ev.on('creds.update', saveCreds);
 
-    sock.ev.on('connection.update', (update) => {
-        const { connection, qr } = update;
-        if (connection === 'close') {
-            sock = null;
-            connectSocket();
-        }
-    });
-
-    return sock;
-}
-
-router.get('/', async (req, res) => {
-    try {
-        const socket = await connectSocket();
-
-        socket.ev.once('connection.update', async (update) => {
-            if (update.qr) {
-                const qrDataUrl = await QRCode.toDataURL(update.qr);
-                if (!res.headersSent) {
-                    res.json({ status: 'success', qr: qrDataUrl });
-                }
-            }
+    // Timeout after 30 seconds if QR not generated
+    setTimeout(() => {
+      if (!qrSent && !res.headersSent) {
+        res.status(408).json({ 
+          status: 'error',
+          message: 'QR generation timed out' 
         });
+        sock.ws.close();
+      }
+    }, 30000);
 
-        // Also try to send QR if already available in cache:
-        if (socket.state && socket.state.qr) {
-            const qrDataUrl = await QRCode.toDataURL(socket.state.qr);
-            if (!res.headersSent) {
-                res.json({ status: 'success', qr: qrDataUrl });
-            }
-        }
-    } catch (error) {
-        console.error('QR generation error:', error);
-        if (!res.headersSent) res.status(500).json({ status: 'error', message: error.message });
-    }
+  } catch (error) {
+    console.error('Server error:', error);
+    res.status(500).json({ 
+      status: 'error',
+      message: 'Internal server error'
+    });
+  }
 });
 
 module.exports = router;
