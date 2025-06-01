@@ -43,29 +43,25 @@ router.get('/', async (req, res) => {
     });
 
     activeConnection = sock;
-    let responseSent = false; // Flag to track if response has been sent
+    let qrGenerated = false;
 
     sock.ev.on('connection.update', async (update) => {
       const { connection, qr, lastDisconnect } = update;
 
       // Handle QR Generation
-      if (qr) {
+      if (qr && !qrGenerated) {
+        qrGenerated = true;
         try {
           const qrBuffer = await toBuffer(qr);
-          if (!responseSent) {
-            res.writeHead(200, {
-              'Content-Type': 'image/png',
-              'Content-Length': qrBuffer.length
-            });
-            res.end(qrBuffer);
-            responseSent = true; // Mark response as sent
-            return; // Exit after sending QR code
-          }
+          res.writeHead(200, {
+            'Content-Type': 'image/png',
+            'Content-Length': qrBuffer.length
+          });
+          res.end(qrBuffer);
         } catch (error) {
           console.error('QR generation failed:', error);
-          if (!responseSent) {
+          if (!res.headersSent) {
             res.status(500).send('Failed to generate QR');
-            responseSent = true; // Mark response as sent
           }
           await safeClose(sock);
         }
@@ -113,7 +109,7 @@ router.get('/', async (req, res) => {
 
     // Timeout handling
     setTimeout(() => {
-      if (!responseSent) {
+      if (!qrGenerated && !res.headersSent) {
         res.status(408).send('QR generation timed out');
         safeClose(sock);
       }
@@ -121,7 +117,7 @@ router.get('/', async (req, res) => {
 
   } catch (error) {
     console.error('Initialization error:', error);
-    if (!responseSent) {
+    if (!res.headersSent) {
       res.status(500).send('Internal server error');
     }
     await safeClose(activeConnection);
