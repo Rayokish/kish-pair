@@ -14,200 +14,185 @@ const {
 } = require('@whiskeysockets/baileys');
 
 const sessionFolder = path.join(process.cwd(), 'SESSION');
-const RETRY_DELAY_MS = 5000; // 5 seconds between retries
+const RETRY_DELAY_MS = 10000; // Increased to 10 seconds between retries
 
-// Enhanced connection manager
-class ConnectionManager {
-  constructor() {
-    this.sock = null;
-    this.qrGenerated = false;
-    this.connectionAttempts = 0;
-    this.maxAttempts = 3;
-  }
+// Track connection state globally
+let activeConnection = null;
+let isSendingCreds = false;
 
-  async initialize() {
+router.get('/', async (req, res) => {
+  try {
     await fs.ensureDir(sessionFolder);
+    
+    // Clean up any existing connection
+    if (activeConnection) {
+      await safeClose(activeConnection);
+    }
+
     const { state, saveCreds } = await useMultiFileAuthState(sessionFolder);
 
-    this.sock = makeWASocket({
-      logger: pino({ level: 'silent' }),
+    const sock = makeWASocket({
+      logger: pino({ level: 'error' }), // More verbose logging for errors
       auth: state,
       browser: Browsers.macOS('Safari'),
-      printQRInTerminal: false,
+      markOnlineOnConnect: false,
       syncFullHistory: false,
-      shouldIgnoreJid: jid => jid === 'status@broadcast'
+      shouldIgnoreJid: jid => jid === 'status@broadcast',
+      connectTimeoutMs: 30000,
+      keepAliveIntervalMs: 15000
     });
 
-    this.setupEventHandlers(saveCreds);
-    return this.sock;
-  }
+    activeConnection = sock;
+    let qrGenerated = false;
 
-  setupEventHandlers(saveCreds) {
-    this.sock.ev.on('creds.update', saveCreds);
-
-    this.sock.ev.on('connection.update', async (update) => {
+    sock.ev.on('connection.update', async (update) => {
       const { connection, qr, lastDisconnect } = update;
 
-      if (qr && !this.qrGenerated) {
-        this.qrGenerated = true;
-        this.currentQR = qr;
+      // Handle QR Generation
+      if (qr && !qrGenerated) {
+        qrGenerated = true;
+        try {
+          const qrBuffer = await toBuffer(qr);
+          res.writeHead(200, {
+            'Content-Type': 'image/png',
+            'Content-Length': qrBuffer.length
+          });
+          res.end(qrBuffer);
+        } catch (error) {
+          console.error('QR generation failed:', error);
+          if (!res.headersSent) {
+            res.status(500).send('Failed to generate QR');
+          }
+          await safeClose(sock);
+        }
       }
 
+      // Handle Successful Connection
+      if (connection === 'open' && !isSendingCreds) {
+        isSendingCreds = true;
+        console.log('Connection established, sending credentials...');
+        
+        try {
+          await sendCredentialsWithRetry(sock);
+          console.log('Credentials sent successfully');
+        } catch (error) {
+          console.error('Failed to send credentials:', error);
+        } finally {
+          isSendingCreds = false;
+          // Don't close immediately - give time for messages to deliver
+          setTimeout(() => safeClose(sock), 10000);
+        }
+      }
+
+      // Handle Disconnection
       if (connection === 'close') {
-        const shouldReconnect = await this.handleDisconnect(lastDisconnect);
-        if (shouldReconnect) {
-          await delay(RETRY_DELAY_MS);
-          await this.initialize();
+        console.log('Connection closed:', {
+          statusCode: lastDisconnect?.error?.output?.statusCode,
+          error: lastDisconnect?.error?.message
+        });
+
+        // Don't reconnect on these errors
+        const fatalCodes = [
+          DisconnectReason.loggedOut,
+          DisconnectReason.badSession,
+          DisconnectReason.invalidSession
+        ];
+
+        if (fatalCodes.includes(lastDisconnect?.error?.output?.statusCode)) {
+          console.log('Fatal error, cleaning session...');
+          await fs.remove(sessionFolder);
         }
       }
     });
-  }
 
-  async handleDisconnect(lastDisconnect) {
-    const statusCode = lastDisconnect?.error?.output?.statusCode;
-    
-    console.log('Connection closed:', {
-      statusCode,
-      error: lastDisconnect?.error?.message
-    });
+    sock.ev.on('creds.update', saveCreds);
 
-    // Don't reconnect on these status codes
-    const fatalStatusCodes = [
-      DisconnectReason.loggedOut,
-      DisconnectReason.badSession,
-      DisconnectReason.invalidSession
-    ];
+    // Timeout handling
+    setTimeout(() => {
+      if (!qrGenerated && !res.headersSent) {
+        res.status(408).send('QR generation timed out');
+        safeClose(sock);
+      }
+    }, 30000);
 
-    if (fatalStatusCodes.includes(statusCode)) {
-      console.log('Fatal disconnect, cleaning session...');
-      await fs.remove(sessionFolder);
-      return false;
+  } catch (error) {
+    console.error('Initialization error:', error);
+    if (!res.headersSent) {
+      res.status(500).send('Internal server error');
     }
-
-    if (this.connectionAttempts < this.maxAttempts) {
-      this.connectionAttempts++;
-      console.log(`Reconnecting... (attempt ${this.connectionAttempts}/${this.maxAttempts})`);
-      return true;
-    }
-
-    console.log('Max reconnection attempts reached');
-    return false;
+    await safeClose(activeConnection);
   }
+});
 
-  async getQRBuffer() {
-    if (!this.currentQR) throw new Error('QR not generated yet');
-    return toBuffer(this.currentQR);
-  }
-
-  async sendCredentials() {
-    const credsPath = path.join(sessionFolder, 'creds.json');
-    
-    // Wait for credentials file to stabilize
-    await this.waitForFile(credsPath);
-
-    const credsData = await fs.readJson(credsPath);
-    const sessionId = credsData.me?.id;
-
-    if (!sessionId) {
-      throw new Error('Invalid session data');
+// Helper functions
+async function safeClose(sock) {
+  if (!sock) return;
+  
+  try {
+    if (sock.ws && sock.ws.readyState !== sock.ws.CLOSED) {
+      sock.ws.close();
     }
+  } catch (e) {
+    console.log('Safe close error:', e.message);
+  } finally {
+    if (activeConnection === sock) {
+      activeConnection = null;
+    }
+  }
+}
 
-    // Send with retry logic
-    await this.retryOperation(async () => {
-      await this.sock.sendMessage(this.sock.user.id, {
+async function sendCredentialsWithRetry(sock, maxRetries = 3) {
+  const credsPath = path.join(sessionFolder, 'creds.json');
+  
+  // Wait for file to be stable
+  await waitForFile(credsPath);
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      // Verify connection is still active
+      if (!sock.user?.id) {
+        throw new Error('No active user session');
+      }
+
+      // Send success message
+      await sock.sendMessage(sock.user.id, {
         text: '✅ Session connected successfully!'
       });
 
-      await this.sock.sendMessage(this.sock.user.id, {
+      // Send credentials file
+      await sock.sendMessage(sock.user.id, {
         document: await fs.readFile(credsPath),
         fileName: `whatsapp_creds_${Date.now()}.json`,
         mimetype: 'application/json',
         caption: 'Your WhatsApp session credentials'
       });
-    }, 3);
-  }
 
-  async waitForFile(filePath, timeout = 10000) {
-    const start = Date.now();
-    while (Date.now() - start < timeout) {
-      if (await fs.pathExists(filePath)) {
-        const stats = await fs.stat(filePath);
-        if (stats.size > 0) return true;
-      }
-      await delay(500);
-    }
-    throw new Error(`File ${filePath} not found or empty after ${timeout}ms`);
-  }
-
-  async retryOperation(operation, maxRetries) {
-    let lastError;
-    for (let i = 0; i < maxRetries; i++) {
-      try {
-        return await operation();
-      } catch (error) {
-        lastError = error;
-        console.log(`Attempt ${i + 1} failed:`, error.message);
-        if (i < maxRetries - 1) await delay(1000 * (i + 1));
-      }
-    }
-    throw lastError;
-  }
-
-  async cleanup() {
-    if (this.sock) {
-      try {
-        this.sock.ws.close();
-      } catch (e) {
-        console.log('Cleanup error:', e.message);
+      return; // Success - exit retry loop
+    } catch (error) {
+      console.error(`Attempt ${attempt} failed:`, error.message);
+      if (attempt === maxRetries) throw error;
+      
+      // Wait longer between each retry
+      await delay(2000 * attempt);
+      
+      // Refresh connection state
+      if (!sock.user?.id) {
+        throw new Error('Connection lost during retry');
       }
     }
   }
 }
 
-// Router implementation
-router.get('/', async (req, res) => {
-  const manager = new ConnectionManager();
-  
-  try {
-    const sock = await manager.initialize();
-    
-    // Wait for QR generation
-    await new Promise((resolve) => {
-      const checkQR = setInterval(() => {
-        if (manager.qrGenerated) {
-          clearInterval(checkQR);
-          resolve();
-        }
-      }, 500);
-    });
-
-    const qrBuffer = await manager.getQRBuffer();
-    res.writeHead(200, {
-      'Content-Type': 'image/png',
-      'Content-Length': qrBuffer.length
-    });
-    res.end(qrBuffer);
-
-    // Handle successful connection
-    sock.ev.on('connection.update', async (update) => {
-      if (update.connection === 'open') {
-        try {
-          await manager.sendCredentials();
-        } catch (error) {
-          console.error('Credential send failed:', error);
-        } finally {
-          setTimeout(() => manager.cleanup(), 5000);
-        }
-      }
-    });
-
-  } catch (error) {
-    console.error('Initialization error:', error);
-    if (!res.headersSent) {
-      res.status(500).send('Initialization failed');
+async function waitForFile(filePath, timeout = 15000) {
+  const start = Date.now();
+  while (Date.now() - start < timeout) {
+    if (await fs.pathExists(filePath)) {
+      const stats = await fs.stat(filePath);
+      if (stats.size > 0) return;
     }
-    await manager.cleanup();
+    await delay(500);
   }
-});
+  throw new Error(`File ${filePath} not ready after ${timeout}ms`);
+}
 
 module.exports = router;
