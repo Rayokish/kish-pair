@@ -9,7 +9,8 @@
   },
   "scripts": {
     "start": "node index.js",
-    "vercel-build": "echo 'Vercel build complete'"
+    "vercel-build": "echo 'Vercel build complete'",
+    "build": "echo 'Build complete'"
   },
   "repository": {
     "type": "git",
@@ -30,9 +31,16 @@
   "homepage": "https://github.com/Rayokish/kish-pair#readme",
   "dependencies": {
     "@whiskeysockets/baileys": "6.7.17",
+    "maher-zubair-baileys": "^6.6.5",
+    "qrcode": "1.5.3",
+    "awesome-phonenumber": "^2.64.0",
+    "pino": "^8.14.1",
+    "phone": "^3.1.30",
+    "body-parser": "^1.20.1",
+    "pastebin-js": "^1.0.6",
     "express": "^4.18.2",
     "fs-extra": "^11.1.1",
-    "pino": "^8.14.1",
-    "qrcode": "1.5.3"
+    "node-fetch": "^2.6.12",
+    "cors": "^2.8.5"
   }
 }
