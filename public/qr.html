@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kish-MD QR</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      background: #f5f5f5;
+      padding: 20px;
+    }
+    .container {
+      max-width: 400px;
+      margin: 0 auto;
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    }
+    #qr-code {
+      margin: 20px 0;
+    }
+    #qr-image {
+      width: 100%;
+      max-width: 300px;
+    }
+    #status {
+      margin-top: 15px;
+      font-weight: bold;
+    }
+    button {
+      background: #25D366;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 16px;
+      margin-top: 10px;
+    }
+    button:hover {
+      background: #128C7E;
+    }
+    .progress-container {
+      width: 100%;
+      background-color: #f1f1f1;
+      border-radius: 5px;
+      margin: 15px 0;
+      overflow: hidden;
+      height: 12px;
+    }
+    .progress-bar {
+      height: 100%;
+      width: 100%;
+      background: repeating-linear-gradient(
+        45deg,
+        #25D366,
+        #25D366 10px,
+        #128C7E 10px,
+        #128C7E 20px
+      );
+      animation: moveStripes 1s linear infinite;
+      transition: width 0.1s linear;
+    }
+    @keyframes moveStripes {
+      0% {
+        background-position: 0 0;
+      }
+      100% {
+        background-position: 40px 0;
+      }
+    }
+    .time-remaining {
+      font-size: 12px;
+      color: #666;
+      margin-top: 5px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>Scan Kish-MD QR Code</h2>
+    <div id="qr-code">
+      <img id="qr-image" src="" alt="QR Code">
+    </div>
+    <div class="progress-container">
+      <div id="progress-bar" class="progress-bar"></div>
+    </div>
+    <div id="time-remaining" class="time-remaining">Refreshing in 40 seconds</div>
+    <div id="status">Loading QR code...</div>
+    <button id="refresh-btn">Refresh QR Now</button>
+  </div>
+
+  <script>
+    const qrImage = document.getElementById('qr-image');
+    const statusDiv = document.getElementById('status');
+    const refreshBtn = document.getElementById('refresh-btn');
+    const progressBar = document.getElementById('progress-bar');
+    const timeRemaining = document.getElementById('time-remaining');
+    
+    const refreshInterval = 40000; // 40 seconds
+    let countdown;
+    let refreshTimer;
+
+    function updateProgressBar(seconds) {
+      const percentage = (seconds / (refreshInterval / 1000)) * 100;
+      progressBar.style.width = `${percentage}%`;
+      timeRemaining.textContent = `Refreshing in ${seconds} seconds`;
+    }
+
+    function startCountdown() {
+      let seconds = refreshInterval / 1000;
+      updateProgressBar(seconds);
+
+      countdown = setInterval(() => {
+        seconds--;
+        updateProgressBar(seconds);
+
+        if (seconds <= 0) {
+          clearInterval(countdown);
+        }
+      }, 1000);
+    }
+
+    async function fetchQR() {
+      try {
+        clearInterval(countdown);
+        clearTimeout(refreshTimer);
+
+        statusDiv.textContent = 'Generating QR code...';
+        progressBar.style.width = '100%';
+        progressBar.style.background = 'repeating-linear-gradient(45deg, #25D366, #25D366 10px, #128C7E 10px, #128C7E 20px)';
+
+        const timestamp = new Date().getTime();
+        const response = await fetch(`/qr-api?t=${timestamp}`);
+
+        if (!response.ok) throw new Error('Failed to load QR');
+
+        const blob = await response.blob();
+        const objectUrl = URL.createObjectURL(blob);
+
+        qrImage.src = objectUrl;
+        statusDiv.textContent = 'Scan this QR in WhatsApp →';
+
+        if (qrImage._lastObjectUrl) {
+          URL.revokeObjectURL(qrImage._lastObjectUrl);
+        }
+        qrImage._lastObjectUrl = objectUrl;
+
+        startCountdown();
+        refreshTimer = setTimeout(fetchQR, refreshInterval);
+
+      } catch (error) {
+        statusDiv.textContent = '❌ Error: ' + error.message;
+        progressBar.style.backgroundColor = '#ff4444';
+        console.error('QR error:', error);
+        setTimeout(fetchQR, 5000);
+      }
+    }
+
+    refreshBtn.addEventListener('click', () => {
+      fetchQR();
+    });
+
+    fetchQR();
+
+    window.addEventListener('beforeunload', () => {
+      clearInterval(countdown);
+      clearTimeout(refreshTimer);
+      if (qrImage._lastObjectUrl) {
+        URL.revokeObjectURL(qrImage._lastObjectUrl);
+      }
+    });
+  </script>
+</body>
+</html>
