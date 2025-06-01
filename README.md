@@ -1,4 +1,4 @@
-# Kish Pair - Dual Deploy
+# Kish Pair -
 
 This project supports **both Render and Vercel** deployments.
 
