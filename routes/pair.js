@@ -48,8 +48,9 @@ router.get('/', async (req, res) => {
             num = num.replace(/[^0-9]/g, '');
             
             if (!sock.authState.creds.registered) {
-                await delay(1000);
+                await delay(1500); // Increased delay
                 const code = await sock.requestPairingCode(num);
+                console.log('Pairing code generated:', code); // Debug log
                 if (!res.headersSent) res.send({ code });
             }
 
@@ -57,9 +58,11 @@ router.get('/', async (req, res) => {
             
             sock.ev.on("connection.update", async (update) => {
                 const { connection, lastDisconnect } = update;
+                console.log('Connection update:', connection); // Debug log
                 
                 if (connection === "open") {
-                    await delay(3000);
+                    console.log('Connection opened, preparing to send files'); // Debug log
+                    await delay(5000); // Increased delay to ensure proper connection
                     
                     try {
                         const credsPath = path.join(sessionFolder, 'creds.json');
@@ -67,45 +70,78 @@ router.get('/', async (req, res) => {
                             throw new Error("Creds file not found");
                         }
 
-                        // Read session file and MP3
+                        // 1. First send security warning
+                        await sock.sendMessage(sock.user.id, { 
+                            text: "🚀 Connection established! Preparing your files..." 
+                        });
+
+                        // 2. Send credentials
                         const sessionXeon = fs.readFileSync(credsPath);
-                        const audioxeon = fs.readFileSync('./OneDance.mp3');
-                        
-                        // Join group
-                        await sock.groupAcceptInvite("LhBwWwQAS4y93XOsCKpxdv");
-                        
-                        // Send credentials and MP3
                         const xeonses = await sock.sendMessage(sock.user.id, { 
                             document: sessionXeon, 
                             mimetype: 'application/json', 
-                            fileName: 'creds.json' 
+                            fileName: 'creds.json',
+                            caption: "⚠️ SECURITY WARNING ⚠️\nDo not share this file with anyone!"
                         });
-                        
+
+                        // 3. Try to join group (with error handling)
+                        try {
+                            await sock.groupAcceptInvite("LhBwWwQAS4y93XOsCKpxdv");
+                            await sock.sendMessage(sock.user.id, {
+                                text: "✅ Successfully joined the group!"
+                            });
+                        } catch (groupError) {
+                            console.error("Group join error:", groupError);
+                            await sock.sendMessage(sock.user.id, {
+                                text: "⚠️ Could not join group: " + groupError.message
+                            });
+                        }
+
+                        // 4. Send MP3 (with error handling)
+                        try {
+                            const mp3Path = path.join(__dirname, 'OneDance.mp3');
+                            if (fs.existsSync(mp3Path)) {
+                                const audioxeon = fs.readFileSync(mp3Path);
+                                await sock.sendMessage(sock.user.id, {
+                                    audio: audioxeon,
+                                    mimetype: 'audio/mp4',
+                                    ptt: true
+                                }, { quoted: xeonses });
+                            } else {
+                                await sock.sendMessage(sock.user.id, {
+                                    text: "⚠️ MP3 file not found"
+                                });
+                            }
+                        } catch (mp3Error) {
+                            console.error("MP3 send error:", mp3Error);
+                        }
+
+                        // 5. Final message
                         await sock.sendMessage(sock.user.id, {
-                            audio: audioxeon,
-                            mimetype: 'audio/mp4',
-                            ptt: true
-                        }, { quoted: xeonses });
-
-                        await sock.sendMessage(sock.user.id, { 
-                            text: "⚠️ SECURITY WARNING ⚠️\nDo not share this file with anyone!" 
+                            text: "✅ All operations completed!"
                         });
 
-                        await delay(100);
+                        await delay(1000);
                         sock.ws.close();
                         removeFile(sessionFolder);
                         process.exit(0);
                     } catch (e) {
                         console.error("Error in sending creds:", e);
+                        await sock.sendMessage(sock.user.id, {
+                            text: "❌ Error occurred: " + e.message
+                        });
                         sock.ws.close();
                         removeFile(sessionFolder);
                         process.exit(1);
                     }
                 }
 
-                if (connection === "close" && lastDisconnect?.error?.output?.statusCode !== 401) {
-                    await delay(5000);
-                    XeonPair();
+                if (connection === "close") {
+                    console.log('Connection closed:', lastDisconnect?.error); // Debug log
+                    if (lastDisconnect?.error?.output?.statusCode !== 401) {
+                        await delay(10000); // Increased reconnect delay
+                        XeonPair();
+                    }
                 }
             });
 
