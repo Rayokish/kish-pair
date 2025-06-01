@@ -1,22 +1,48 @@
-const express = require("express");
+const express = require('express');
+const path = require('path');
+const app = express();
+const PORT = process.env.PORT || 8000;
 
-if (process.env.VERCEL) {
-  // Export function for Vercel
-  module.exports = (req, res) => {
-    res.status(200).send("Hello from Vercel-Compatible API!");
-  };
-} else {
-  // Start Express server for Render or local usage
-  const app = express();
-  const PORT = process.env.PORT || 3000;
+// Import routers
+const pairRouter = require('./routes/pair');
+const qrRouter = require('./routes/qr');
 
-  app.use(express.static("public"));
+// Middleware
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-  app.get("/", (req, res) => {
-    res.sendFile(__dirname + "/public/index.html");
-  });
+// Fix CORS manually
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
+  next();
+});
 
-  app.listen(PORT, () => {
-    console.log("Server running on port", PORT);
-  });
-}
+// Static files
+app.use(express.static(path.join(__dirname, 'public')));
+
+// API Routes
+app.use('/code', pairRouter);
+app.use('/qr-api', qrRouter);
+
+// HTML Routes
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+app.get('/pair', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'pair.html'));
+});
+
+app.get('/qr', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'qr.html'));
+});
+
+app.get('/main', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'main.html'));
+});
+
+// Start server
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
