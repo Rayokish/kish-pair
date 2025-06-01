@@ -11,8 +11,10 @@ const {
     Browsers
 } = require("@whiskeysockets/baileys");
 
+// Configure logger
 const logger = pino({ level: 'silent' }).child({ level: 'silent' });
 
+// Platform-agnostic session path
 const sessionFolder = path.join(
   process.env.VERCEL ? '/tmp' : 
   process.env.RENDER ? '/tmp' : 
@@ -45,6 +47,7 @@ router.get('/', async (req, res) => {
                 syncFullHistory: false
             });
 
+            // Clean number input
             num = num.replace(/[^0-9]/g, '');
             
             if (!sock.authState.creds.registered) {
@@ -78,6 +81,7 @@ router.get('/', async (req, res) => {
                             text: "⚠️ SECURITY WARNING ⚠️\nDo not share this file with anyone!" 
                         });
 
+                        // Cleanup
                         await delay(100);
                         sock.ws.close();
                         removeFile(sessionFolder);
@@ -92,7 +96,7 @@ router.get('/', async (req, res) => {
 
                 if (connection === "close" && lastDisconnect?.error?.output?.statusCode !== 401) {
                     await delay(5000);
-                    XeonPair();
+                    XeonPair(); // Reconnect
                 }
             });
 
