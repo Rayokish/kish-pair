@@ -1,43 +1,21 @@
 const express = require('express');
-const path = require('path');
-const bodyParser = require('body-parser');
-const fetch = require('node-fetch');
-
 const app = express();
-const PORT = process.env.PORT || 8000;
-const pairRouter = require('./pair');
-const qrRouter = require('./qr');
+const PORT = process.env.PORT || 3000;
 
-// Increase event listeners limit
-require('events').EventEmitter.defaultMaxListeners = 500;
+// Import routes
+const qrRouter = require('./qr');
+const pairRouter = require('./pair');
 
 // Middleware
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
+app.use('/qr-api', qrRouter);
+app.use('/pair-api', pairRouter);
 
-// Static files
-app.use('/js', express.static(path.join(__dirname, 'js')));
-app.use('/assets', express.static(path.join(__dirname, 'assets'))); // For CSS/images
-
-// Routes
-app.use('/code', pairRouter);
-app.use('/qr-api', qrRouter); // API endpoint for QR generation
-
-// HTML Routes
+// Optional root route
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'main.html'));
-});
-
-app.get('/pair', (req, res) => {
-  res.sendFile(path.join(__dirname, 'pair.html'));
-});
-
-app.get('/qr', (req, res) => {
-  res.sendFile(path.join(__dirname, 'qr.html'));
+  res.send('🟢 Server is running. Use /qr-api or /pair-api.');
 });
 
 // Start server
 app.listen(PORT, () => {
-  console.log('🚀 Kish Pairing Server Running!');
-  console.log(`🌐 Access at: http://localhost:${PORT}`);
+  console.log(`✅ Server is listening on port ${PORT}`);
 });
