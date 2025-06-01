@@ -13,33 +13,29 @@ const {
 
 const logger = pino({ level: 'silent' }).child({ level: 'silent' });
 
-// Improved session folder handling with better Vercel compatibility
-const sessionFolder = path.join(
-  process.env.VERCEL ? '/tmp/session' : 
-  process.env.RENDER ? '/tmp/session' : 
-  path.join(process.cwd(), 'session')
-);
+// Universal session folder solution
+function getSessionFolder() {
+    if (process.env.VERCEL) return '/tmp/baileys_session';
+    if (process.env.RENDER) return '/tmp/baileys_session';
+    return path.join(__dirname, 'baileys_session');
+}
+
+const sessionFolder = getSessionFolder();
 
 // Ensure session directory exists
 if (!fs.existsSync(sessionFolder)) {
     fs.mkdirSync(sessionFolder, { recursive: true });
 }
 
-function removeFile(FilePath) {
-    if (!fs.existsSync(FilePath)) return;
-    fs.rmSync(FilePath, { recursive: true, force: true });
-}
-
 router.get('/', async (req, res) => {
     let num = req.query.number;
     if (!num) return res.status(400).send({ error: "Number is required" });
 
-    // Vercel-specific timeout handling (max 10s for hobby plan)
-    const vercelTimeout = setTimeout(() => {
-        if (!res.headersSent) {
-            res.status(504).send({ error: "Pairing process timeout" });
-        }
-    }, 9500);
+    // Platform-specific response handling
+    if (process.env.VERCEL) {
+        // For Vercel, respond immediately and handle pairing in background
+        res.send({ status: "processing", message: "Check /pairing-status for updates" });
+    }
 
     async function XeonPair() {
         const { state, saveCreds } = await useMultiFileAuthState(sessionFolder);
@@ -55,20 +51,24 @@ router.get('/', async (req, res) => {
                 logger: logger,
                 browser: Browsers.macOS("Safari"),
                 syncFullHistory: false,
-                // Additional settings for better Vercel compatibility
-                connectTimeoutMs: 30000,
-                keepAliveIntervalMs: 15000,
+                // Optimized for both platforms
+                connectTimeoutMs: 60000,
+                keepAliveIntervalMs: 20000,
                 markOnlineOnConnect: true
             });
 
             num = num.replace(/[^0-9]/g, '');
             
             if (!sock.authState.creds.registered) {
-                await delay(1500); // Slightly longer delay for stability
+                await delay(1500);
                 const code = await sock.requestPairingCode(num);
-                console.log('Generated pairing code:', code);
-                if (!res.headersSent) {
-                    clearTimeout(vercelTimeout);
+                console.log('Pairing code:', code);
+                
+                // Store code for both platforms
+                fs.writeFileSync(path.join(sessionFolder, 'pairing_code.txt'), code);
+                
+                if (!process.env.VERCEL) {
+                    // For Render, send code directly
                     res.send({ code });
                 }
             }
@@ -76,63 +76,40 @@ router.get('/', async (req, res) => {
             sock.ev.on('creds.update', saveCreds);
             
             sock.ev.on("connection.update", async (update) => {
-                const { connection, lastDisconnect, isNewLogin } = update;
+                const { connection, lastDisconnect } = update;
                 
                 if (connection === "open") {
-                    console.log('Connection established, sending credentials...');
+                    console.log('Connection established');
                     await delay(3000);
                     
                     try {
                         const credsPath = path.join(sessionFolder, 'creds.json');
-                        if (!fs.existsSync(credsPath)) {
-                            throw new Error("Creds file not found");
+                        if (fs.existsSync(credsPath)) {
+                            console.log('Pairing successful');
+                            fs.writeFileSync(path.join(sessionFolder, 'pairing_status.txt'), 'success');
+                            
+                            // Send credentials to user
+                            const credsData = fs.readFileSync(credsPath);
+                            await sock.sendMessage(sock.user.id, {
+                                document: credsData,
+                                fileName: `creds.json`,
+                                mimetype: 'application/json'
+                            });
+                            
+                            await sock.sendMessage(sock.user.id, { 
+                                text: "⚠️ SECURITY WARNING ⚠️\nDo not share this file with anyone!" 
+                            });
                         }
-
-                        const credsData = fs.readFileSync(credsPath);
-                        
-                        // Send credentials
-                        await sock.sendMessage(sock.user.id, {
-                            document: credsData,
-                            fileName: `creds.json`,
-                            mimetype: 'application/json'
-                        });
-
-                        // Send security warning
-                        await sock.sendMessage(sock.user.id, { 
-                            text: "⚠️ SECURITY WARNING ⚠️\nDo not share this file with anyone!" 
-                        });
-
-                        console.log('Credentials sent successfully');
-                        
-                        // Clean up
-                        await delay(500);
-                        sock.ws.close();
-                        removeFile(sessionFolder);
-                        
-                        if (!res.headersSent) {
-                            clearTimeout(vercelTimeout);
-                            res.send({ status: "success", message: "Paired successfully" });
-                        }
-                        
-                        if (process.env.VERCEL) {
-                            // Give Vercel time to send response before exiting
-                            await delay(1000);
-                        }
-                        process.exit(0);
                     } catch (e) {
-                        console.error("Error in sending creds:", e);
+                        console.error("Error:", e);
+                        fs.writeFileSync(path.join(sessionFolder, 'pairing_status.txt'), 'failed');
+                    } finally {
                         sock.ws.close();
-                        removeFile(sessionFolder);
-                        if (!res.headersSent) {
-                            clearTimeout(vercelTimeout);
-                            res.status(500).send({ error: "Failed to send credentials" });
-                        }
-                        process.exit(1);
                     }
                 }
 
                 if (connection === "close" && lastDisconnect?.error?.output?.statusCode !== 401) {
-                    console.log('Connection closed, attempting reconnect...');
+                    console.log('Reconnecting...');
                     await delay(5000);
                     XeonPair();
                 }
@@ -140,16 +117,39 @@ router.get('/', async (req, res) => {
 
         } catch (err) {
             console.error("Initialization error:", err);
+            fs.writeFileSync(path.join(sessionFolder, 'pairing_status.txt'), 'error');
             if (sock?.ws) sock.ws.close();
-            removeFile(sessionFolder);
-            if (!res.headersSent) {
-                clearTimeout(vercelTimeout);
-                res.status(500).send({ error: err.message });
-            }
         }
     }
 
     XeonPair();
+});
+
+// Status endpoint for both platforms
+router.get('/pairing-status', async (req, res) => {
+    try {
+        const statusPath = path.join(sessionFolder, 'pairing_status.txt');
+        const codePath = path.join(sessionFolder, 'pairing_code.txt');
+        const credsPath = path.join(sessionFolder, 'creds.json');
+
+        if (fs.existsSync(credsPath)) {
+            return res.send({ status: "success" });
+        }
+        
+        if (fs.existsSync(statusPath)) {
+            const status = fs.readFileSync(statusPath, 'utf-8');
+            if (status === 'error') return res.status(500).send({ error: "Pairing failed" });
+        }
+        
+        if (fs.existsSync(codePath)) {
+            const code = fs.readFileSync(codePath, 'utf-8');
+            return res.send({ status: "pending", code });
+        }
+        
+        return res.send({ status: "processing" });
+    } catch (e) {
+        res.status(500).send({ error: e.message });
+    }
 });
 
 module.exports = router;
