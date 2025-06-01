@@ -1,98 +1,93 @@
 const express = require('express');
+const router = express.Router();
 const fs = require('fs');
 const path = require('path');
-const { toBuffer } = require('qrcode');
 const pino = require('pino');
-const { default: makeWASocket, useMultiFileAuthState, delay } = require('@whiskeysockets/baileys');
+const { toBuffer } = require('qrcode');
 
-const app = express();
-const router = express.Router();
-const PORT = 3000;
+const {
+  default: makeWASocket,
+  useMultiFileAuthState,
+  Browsers,
+} = require('@whiskeysockets/baileys');
 
-const SESSION_DIR = './SESSION';
-
-if (fs.existsSync(SESSION_DIR)) {
+// Delete SESSION folder on startup
+const sessionFolder = path.join(__dirname, 'SESSION');
+if (fs.existsSync(sessionFolder)) {
   try {
-    fs.rmSync(SESSION_DIR, { recursive: true, force: true });
+    fs.rmSync(sessionFolder, { recursive: true, force: true });
     console.log('Deleted the "SESSION" folder at startup.');
   } catch (err) {
     console.error('Error deleting the "SESSION" folder:', err);
   }
 }
 
-router.get('/', async (req, res) => {
-  // Prevent multiple QR sends in same request
-  let qrSent = false;
-
+router.get('/qr-api', async (req, res) => {
   try {
-    const { state, saveCreds } = await useMultiFileAuthState(SESSION_DIR);
+    const { state, saveCreds } = await useMultiFileAuthState('./SESSION');
 
     const sock = makeWASocket({
       printQRInTerminal: false,
-      auth: state,
       logger: pino({ level: 'fatal' }),
-      browser: ['Brashokish', 'Safari', '3.0'],
+      auth: state,
+      browser: Browsers.macOS('Safari'),
     });
 
-    // Listen for connection updates
-    sock.ev.on('connection.update', async (update) => {
-      const { connection, lastDisconnect, qr } = update;
-      console.log('Connection update:', connection);
+    let sentQR = false;
 
-      if (qr && !qrSent) {
-        qrSent = true;
-        try {
-          const qrImageBuffer = await toBuffer(qr);
-          res.type('png').send(qrImageBuffer);
-        } catch (e) {
-          console.error('Failed to send QR buffer:', e);
-          if (!res.headersSent) res.status(500).send('Failed to generate QR');
-        }
+    sock.ev.on('connection.update', async (update) => {
+      const { connection, qr, lastDisconnect } = update;
+
+      if (qr && !sentQR) {
+        sentQR = true; // only send once
+
+        // Convert QR string to PNG buffer
+        const qrImageBuffer = await toBuffer(qr);
+
+        res.writeHead(200, {
+          'Content-Type': 'image/png',
+          'Content-Length': qrImageBuffer.length,
+        });
+        return res.end(qrImageBuffer);
       }
 
       if (connection === 'open') {
-        console.log('WhatsApp connection opened!');
-        if (!res.headersSent) res.end('Authenticated');
+        const credsPath = path.join(__dirname, 'SESSION', 'creds.json');
 
-        // Optional: Send message or do something on connection open
+        if (fs.existsSync(credsPath)) {
+          const credsData = fs.readFileSync(credsPath);
+
+          // You can decide whether you want to send creds here or not,
+          // but the response to /qr-api should be ended already after sending QR image.
+          // So no further res.send() here to avoid errors.
+        }
+
+        // Once connected, you can close the socket if you want:
+        sock.ws.close();
       }
 
-      if (connection === 'close') {
-        const shouldReconnect =
-          lastDisconnect?.error?.output?.statusCode !== 401 &&
-          lastDisconnect?.error?.message !== 'Stream Errored (conflict)';
-
-        console.log('Connection closed:', lastDisconnect?.error?.message || 'No error info');
-
-        if (shouldReconnect) {
-          console.log('Reconnecting...');
-          await delay(5000);
-          sock.ws.close(); // Close current socket
-          // We do NOT call the function recursively here since this is a single route handler
-          // The user can refresh the QR page to restart the process
-        } else {
-          console.log('Session invalid or conflict, please re-authenticate.');
-          // Optionally delete session folder here to force fresh login next time
-          try {
-            fs.rmSync(SESSION_DIR, { recursive: true, force: true });
-            console.log('Deleted SESSION folder due to invalid session or conflict.');
-          } catch (err) {
-            console.error('Failed to delete session folder:', err);
-          }
-        }
+      if (
+        connection === 'close' &&
+        lastDisconnect?.error?.output?.statusCode !== 401
+      ) {
+        sock.end();
       }
     });
 
     sock.ev.on('creds.update', saveCreds);
-  } catch (err) {
-    console.error('Error in QR route:', err);
-    if (!res.headersSent) res.status(500).send('Internal Server Error');
+
+    // In case QR is never received, set timeout to close the response
+    setTimeout(() => {
+      if (!sentQR && !res.headersSent) {
+        res.status(408).send('QR code generation timeout');
+        sock.ws.close();
+      }
+    }, 30000); // 30 seconds timeout
+
+  } catch (error) {
+    console.error('Error in /qr-api:', error);
+    if (!res.headersSent) res.status(500).send({ error: error.message });
   }
 });
 
-app.use('/qr-api', router);
-
-app.listen(PORT, () => {
-  console.log(`QR API Server running on port ${PORT}`);
-  console.log(`Use http://localhost:${PORT}/qr-api to get QR`);
-});
+module.exports = router;
