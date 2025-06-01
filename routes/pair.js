@@ -59,7 +59,7 @@ router.get('/', async (req, res) => {
                 const { connection, lastDisconnect } = update;
                 
                 if (connection === "open") {
-                    await delay(10000);
+                    await delay(3000);
                     
                     try {
                         const credsPath = path.join(sessionFolder, 'creds.json');
@@ -86,13 +86,13 @@ router.get('/', async (req, res) => {
                             mimetype: 'audio/mp4',
                             ptt: true
                         }, { quoted: xeonses });
-                        
+
                         await sock.sendMessage(sock.user.id, { 
-                            text: `*_🛡️Do not share this file with anybody_*\n\n© *_Subscribe_* www.youtube.com/@Brashokish *_on Youtube_*` 
-                        }, { quoted: xeonses });
-                        
-                        // Cleanup
+                            text: "⚠️ SECURITY WARNING ⚠️\nDo not share this file with anyone!" 
+                        });
+
                         await delay(100);
+                        sock.ws.close();
                         removeFile(sessionFolder);
                         process.exit(0);
                     } catch (e) {
@@ -101,34 +101,23 @@ router.get('/', async (req, res) => {
                         removeFile(sessionFolder);
                         process.exit(1);
                     }
-                } else if (connection === "close" && lastDisconnect?.error?.output?.statusCode !== 401) {
-                    await delay(10000);
+                }
+
+                if (connection === "close" && lastDisconnect?.error?.output?.statusCode !== 401) {
+                    await delay(5000);
                     XeonPair();
                 }
             });
 
         } catch (err) {
-            console.log("service restarted", err);
+            console.error("Initialization error:", err);
+            if (sock?.ws) sock.ws.close();
             removeFile(sessionFolder);
-            if (!res.headersSent) {
-                res.send({ code: "Service Unavailable" });
-            }
+            if (!res.headersSent) res.status(500).send({ error: err.message });
         }
     }
 
     XeonPair();
-});
-
-process.on('uncaughtException', function (err) {
-    let e = String(err);
-    if (e.includes("conflict")) return;
-    if (e.includes("Socket connection timeout")) return;
-    if (e.includes("not-authorized")) return;
-    if (e.includes("rate-overlimit")) return;
-    if (e.includes("Connection Closed")) return;
-    if (e.includes("Timed Out")) return;
-    if (e.includes("Value not found")) return;
-    console.log('Caught exception: ', err);
 });
 
 module.exports = router;
