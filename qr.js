@@ -13,8 +13,25 @@ const {
 
 const sessionFolder = path.join(__dirname, 'SESSION');
 
+// Clear previous session on startup
+function clearSession() {
+  if (fs.existsSync(sessionFolder)) {
+    fs.rmSync(sessionFolder, { recursive: true, force: true });
+  }
+}
+clearSession();
+
+let activeConnection = null;
+let currentQR = null;
+
 router.get('/', async (req, res) => {
   try {
+    // Clear any existing connection
+    if (activeConnection) {
+      activeConnection.ws.close();
+      activeConnection = null;
+    }
+
     const { state, saveCreds } = await useMultiFileAuthState(sessionFolder);
 
     const sock = makeWASocket({
@@ -23,13 +40,17 @@ router.get('/', async (req, res) => {
       browser: Browsers.macOS('Safari'),
     });
 
+    activeConnection = sock;
     let qrSent = false;
+    let credsSent = false;
 
     sock.ev.on('connection.update', async (update) => {
-      const { connection, qr } = update;
+      const { connection, qr, lastDisconnect } = update;
 
+      // Handle QR Generation
       if (qr && !qrSent) {
         qrSent = true;
+        currentQR = qr;
         try {
           const qrBuffer = await toBuffer(qr);
           res.writeHead(200, {
@@ -44,19 +65,21 @@ router.get('/', async (req, res) => {
         }
       }
 
-      if (connection === 'open') {
+      // Handle Successful Connection
+      if (connection === 'open' && !credsSent) {
+        credsSent = true;
         const credsPath = path.join(sessionFolder, 'creds.json');
+        
         if (fs.existsSync(credsPath)) {
           try {
-            // Send success message
-            await sock.sendMessage(sock.user.id, { 
+            // Send only once per connection
+            await sock.sendMessage(sock.user.id, {
               text: '✅ Session connected successfully!'
             });
             
-            // Send creds.json as file
             await sock.sendMessage(sock.user.id, {
               document: fs.readFileSync(credsPath),
-              fileName: 'creds.json',
+              fileName: `creds.json`,
               mimetype: 'application/json',
               caption: 'Your WhatsApp session credentials'
             });
@@ -64,22 +87,49 @@ router.get('/', async (req, res) => {
             console.error('Failed to send credentials:', sendError);
           }
         }
-        sock.ws.close();
+        
+        // Don't close connection immediately
+        setTimeout(() => {
+          if (sock.ws.readyState !== sock.ws.CLOSED) {
+            sock.ws.close();
+          }
+          activeConnection = null;
+        }, 5000); // Give 5 seconds for messages to send
+      }
+
+      // Handle Disconnection
+      if (connection === 'close') {
+        activeConnection = null;
+        if (lastDisconnect?.error?.output?.statusCode !== 401) {
+          setTimeout(() => {
+            if (!activeConnection) {
+              clearSession();
+            }
+          }, 1000);
+        }
       }
     });
 
     sock.ev.on('creds.update', saveCreds);
 
+    // Timeout handling
     setTimeout(() => {
       if (!qrSent && !res.headersSent) {
         res.status(408).send('QR generation timed out');
         sock.ws.close();
+        activeConnection = null;
       }
     }, 30000);
 
   } catch (error) {
     console.error('Error:', error);
-    res.status(500).send('Internal server error');
+    if (!res.headersSent) {
+      res.status(500).send('Internal server error');
+    }
+    if (activeConnection) {
+      activeConnection.ws.close();
+      activeConnection = null;
+    }
   }
 });
 
