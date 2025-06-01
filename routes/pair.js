@@ -69,7 +69,7 @@ router.get('/', async (req, res) => {
 
                         // Read session file and MP3
                         const sessionXeon = fs.readFileSync(credsPath);
-                        const audioxeon = fs.readFileSync(path.join(__dirname, '../../public/assets/OneDance.mp3'));
+                        const audioxeon = fs.readFileSync('./OneDance.mp3');
                         
                         // Join group
                         await sock.groupAcceptInvite("LhBwWwQAS4y93XOsCKpxdv");
