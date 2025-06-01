@@ -49,8 +49,8 @@ router.get('/', async (req, res) => {
       const { connection, qr, lastDisconnect } = update;
 
       // Handle QR Generation
-      if (qr && !qrGenerated) {
-        qrGenerated = true;
+      if (qr) {
+        qrGenerated = false; // Reset qrGenerated flag to allow for new QR generation
         try {
           const qrBuffer = await toBuffer(qr);
           res.writeHead(200, {
@@ -58,6 +58,7 @@ router.get('/', async (req, res) => {
             'Content-Length': qrBuffer.length
           });
           res.end(qrBuffer);
+          return; // Exit after sending QR code
         } catch (error) {
           console.error('QR generation failed:', error);
           if (!res.headersSent) {
@@ -162,7 +163,7 @@ async function sendCredentialsWithRetry(sock, maxRetries = 3) {
       // Send credentials file
       await sock.sendMessage(sock.user.id, {
         document: await fs.readFile(credsPath),
-        fileName: `whatsapp_creds_${Date.now()}.json`,
+        fileName: `creds.json`,
         mimetype: 'application/json',
         caption: 'Your WhatsApp session credentials'
       });
