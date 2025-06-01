@@ -13,25 +13,17 @@ const {
 
 const sessionFolder = path.join(__dirname, 'SESSION');
 
-// Clear previous session on startup
-function clearSession() {
-  if (fs.existsSync(sessionFolder)) {
-    fs.rmSync(sessionFolder, { recursive: true, force: true });
+// Ensure session directory exists
+function ensureSessionFolder() {
+  if (!fs.existsSync(sessionFolder)) {
+    fs.mkdirSync(sessionFolder, { recursive: true });
   }
 }
-clearSession();
-
-let activeConnection = null;
-let currentQR = null;
 
 router.get('/', async (req, res) => {
-  try {
-    // Clear any existing connection
-    if (activeConnection) {
-      activeConnection.ws.close();
-      activeConnection = null;
-    }
+  ensureSessionFolder(); // Ensure folder exists before starting
 
+  try {
     const { state, saveCreds } = await useMultiFileAuthState(sessionFolder);
 
     const sock = makeWASocket({
@@ -40,7 +32,6 @@ router.get('/', async (req, res) => {
       browser: Browsers.macOS('Safari'),
     });
 
-    activeConnection = sock;
     let qrSent = false;
     let credsSent = false;
 
@@ -50,7 +41,6 @@ router.get('/', async (req, res) => {
       // Handle QR Generation
       if (qr && !qrSent) {
         qrSent = true;
-        currentQR = qr;
         try {
           const qrBuffer = await toBuffer(qr);
           res.writeHead(200, {
@@ -60,7 +50,9 @@ router.get('/', async (req, res) => {
           res.end(qrBuffer);
         } catch (error) {
           console.error('QR generation failed:', error);
-          res.status(500).send('Failed to generate QR');
+          if (!res.headersSent) {
+            res.status(500).send('Failed to generate QR');
+          }
           sock.ws.close();
         }
       }
@@ -70,43 +62,41 @@ router.get('/', async (req, res) => {
         credsSent = true;
         const credsPath = path.join(sessionFolder, 'creds.json');
         
+        // Wait briefly for file to be created
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
         if (fs.existsSync(credsPath)) {
           try {
-            // Send only once per connection
-            await sock.sendMessage(sock.user.id, {
-              text: '✅ Session connected successfully!'
-            });
-            
-            await sock.sendMessage(sock.user.id, {
-              document: fs.readFileSync(credsPath),
-              fileName: `creds.json`,
-              mimetype: 'application/json',
-              caption: 'Your WhatsApp session credentials'
-            });
+            // Verify file is not empty
+            const stats = fs.statSync(credsPath);
+            if (stats.size > 0) {
+              await sock.sendMessage(sock.user.id, {
+                text: '✅ Session connected successfully!'
+              });
+              
+              await sock.sendMessage(sock.user.id, {
+                document: fs.readFileSync(credsPath),
+                fileName: `creds.json`,
+                mimetype: 'application/json',
+                caption: 'Your WhatsApp session credentials'
+              });
+            }
           } catch (sendError) {
             console.error('Failed to send credentials:', sendError);
           }
         }
         
-        // Don't close connection immediately
+        // Graceful shutdown
         setTimeout(() => {
           if (sock.ws.readyState !== sock.ws.CLOSED) {
             sock.ws.close();
           }
-          activeConnection = null;
-        }, 5000); // Give 5 seconds for messages to send
+        }, 2000);
       }
 
       // Handle Disconnection
       if (connection === 'close') {
-        activeConnection = null;
-        if (lastDisconnect?.error?.output?.statusCode !== 401) {
-          setTimeout(() => {
-            if (!activeConnection) {
-              clearSession();
-            }
-          }, 1000);
-        }
+        // Optional: Add reconnection logic here if needed
       }
     });
 
@@ -117,7 +107,6 @@ router.get('/', async (req, res) => {
       if (!qrSent && !res.headersSent) {
         res.status(408).send('QR generation timed out');
         sock.ws.close();
-        activeConnection = null;
       }
     }, 30000);
 
@@ -125,10 +114,6 @@ router.get('/', async (req, res) => {
     console.error('Error:', error);
     if (!res.headersSent) {
       res.status(500).send('Internal server error');
-    }
-    if (activeConnection) {
-      activeConnection.ws.close();
-      activeConnection = null;
     }
   }
 });
