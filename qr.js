@@ -11,10 +11,9 @@ const {
   Browsers,
 } = require('@whiskeysockets/baileys');
 
-// Session folder path
 const sessionFolder = path.join(__dirname, 'SESSION');
 
-// Ensure SESSION directory exists
+// Ensure session directory exists
 if (!fs.existsSync(sessionFolder)) {
   fs.mkdirSync(sessionFolder, { recursive: true });
 }
@@ -24,86 +23,96 @@ router.get('/', async (req, res) => {
     const { state, saveCreds } = await useMultiFileAuthState(sessionFolder);
 
     const sock = makeWASocket({
-      printQRInTerminal: true, // Helps debugging
-      logger: pino({ level: 'fatal' }),
+      // Removed deprecated printQRInTerminal
+      logger: pino({ level: 'silent' }), // Silent logger for cleaner output
       auth: state,
       browser: Browsers.macOS('Safari'),
     });
 
     let qrSent = false;
+    let connectionTimeout;
 
     sock.ev.on('connection.update', async (update) => {
-      const { connection, qr } = update;
+      const { connection, qr, lastDisconnect } = update;
 
-      // Send QR code
+      // Handle QR Code Generation
       if (qr && !qrSent) {
         qrSent = true;
+        clearTimeout(connectionTimeout);
+        
         try {
+          // Generate QR as data URL for web display
           const qrImage = await QRCode.toDataURL(qr);
+          
+          // Also log QR to console (alternative to printQRInTerminal)
+          console.log('Scan this QR code to connect:');
+          console.log(qr); // This shows the raw QR code in terminal
+          
           res.json({
             status: 'success',
             qr: qrImage,
-            message: 'Scan this QR code to connect'
+            message: 'Scan the QR code to connect'
           });
         } catch (error) {
           console.error('QR generation failed:', error);
-          res.status(500).json({ 
-            status: 'error',
-            message: 'Failed to generate QR code'
-          });
+          res.status(500).json({ error: 'Failed to generate QR code' });
           sock.ws.close();
         }
       }
 
-      // On successful connection
+      // Handle Successful Connection
       if (connection === 'open') {
         const credsPath = path.join(sessionFolder, 'creds.json');
         
         if (fs.existsSync(credsPath)) {
           try {
             const credsData = fs.readFileSync(credsPath, 'utf8');
-            const sessionId = JSON.parse(credsData).me.id; // Extract WhatsApp ID from creds.json
-
-            // Send session info to user
+            const sessionInfo = JSON.parse(credsData);
+            
+            // Send credentials to user
             await sock.sendMessage(sock.user.id, {
-              text: `✅ Connected!\n\nYour Session ID:\n${sessionId}\n\nKeep this safe!`
+              text: `✅ Session Connected!\n\nUser ID: ${sessionInfo.me.id}\n\nKeep this information secure.`
             });
 
-            // Optional: Send creds.json as a file
+            // Send creds.json as file attachment
             await sock.sendMessage(sock.user.id, {
               document: fs.readFileSync(credsPath),
-              fileName: 'creds.json',
+              fileName: 'whatsapp_session.json',
               mimetype: 'application/json'
             });
-
-          } catch (error) {
-            console.error('Failed to send session info:', error);
+          } catch (e) {
+            console.error('Failed to send session info:', e);
           }
         }
+        
+        sock.ws.close();
+      }
 
-        sock.ws.close(); // Disconnect after saving session
+      // Handle Connection Errors
+      if (connection === 'close' && lastDisconnect?.error?.output?.statusCode !== 401) {
+        console.log('Connection closed, attempting reconnect...');
+        setTimeout(() => initializeWhatsApp(), 5000);
       }
     });
 
     sock.ev.on('creds.update', saveCreds);
 
-    // Timeout after 30 seconds if QR not generated
-    setTimeout(() => {
+    // Connection Timeout (30 seconds)
+    connectionTimeout = setTimeout(() => {
       if (!qrSent && !res.headersSent) {
-        res.status(408).json({ 
-          status: 'error',
-          message: 'QR generation timed out' 
-        });
+        res.status(408).json({ error: 'QR generation timed out' });
         sock.ws.close();
       }
     }, 30000);
 
-  } catch (error) {
-    console.error('Server error:', error);
-    res.status(500).json({ 
-      status: 'error',
-      message: 'Internal server error'
+    // Handle client disconnect
+    req.on('close', () => {
+      if (!qrSent) sock.ws.close();
     });
+
+  } catch (error) {
+    console.error('Initialization error:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 
