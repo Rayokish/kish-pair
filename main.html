@@ -24,7 +24,7 @@
       background: var(--dark-bg);
       overflow: hidden;
       font-family: 'Share Tech Mono', monospace;
-      display: flex;
+      display: none; /* Changed to none initially */
       justify-content: center;
       align-items: center;
       z-index: 9999;
@@ -211,6 +211,34 @@
       font-weight: bold;
     }
 
+    /* Fork verification screen */
+    #fork-verify-screen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: var(--dark-bg);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+      z-index: 10000;
+      font-family: 'Share Tech Mono', monospace;
+      color: var(--neon-green);
+      text-align: center;
+    }
+
+    .verify-spinner {
+      width: 50px;
+      height: 50px;
+      border: 4px solid var(--neon-green);
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-bottom: 20px;
+    }
+
     @keyframes rotate {
       0% { transform: rotate(0deg); }
       100% { transform: rotate(360deg); }
@@ -234,6 +262,10 @@
     @keyframes blink {
       0%, 100% { opacity: 0.5; }
       50% { opacity: 1; }
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
     }
 
     /* ===== MAIN BOT STYLES ===== */
@@ -339,6 +371,13 @@
   <!-- Security Notice (for silent blocking) -->
   <div id="blockNotice" class="block-notice">Security restriction activated</div>
 
+  <!-- Fork Verification Screen -->
+  <div id="fork-verify-screen">
+    <div class="verify-spinner"></div>
+    <h2>VERIFYING FORK STATUS</h2>
+    <p>Checking repository permissions...</p>
+  </div>
+
   <!-- Loading Screen -->
   <div id="loading-screen">
     <div class="grid-overlay"></div>
@@ -437,102 +476,117 @@
       window.top.location = window.self.location;
     }
 
-    // ===== LOADING SCREEN SCRIPT =====
-    // Create binary rain effect
-    function createBinaryRain() {
-      const binaryRain = document.getElementById('binaryRain');
-      const columns = Math.floor(window.innerWidth / 30);
-      
-      for (let i = 0; i < columns; i++) {
-        const column = document.createElement('div');
-        column.className = 'binary-column';
-        column.style.setProperty('--delay', Math.random());
-        
-        let binaryString = '';
-        const rows = Math.floor(window.innerHeight / 24) + 2;
-        for (let j = 0; j < rows; j++) {
-          binaryString += Math.random() > 0.5 ? '1' : '0';
-          binaryString += '<br>';
-        }
-        
-        column.innerHTML = binaryString;
-        binaryRain.appendChild(column);
-      }
+    // ===== FORK VERIFICATION =====
+    function verifyFork() {
+      // Simulate fork verification (replace with actual verification)
+      setTimeout(() => {
+        document.getElementById('fork-verify-screen').style.display = 'none';
+        startLoadingScreen();
+      }, 2000);
     }
 
-    // Status messages for loading screen
-    const statusMessages = [
-      "Initializing interface...",
-      "Loading assets...",
-      "Preparing options...",
-      "Almost ready...",
-      "Launching KISH-MD..."
-    ];
-
-    // Update progress and status
-    let progress = 0;
-    const progressFill = document.getElementById('progressFill');
-    const hudText = document.getElementById('hudText');
-    const statusText = document.getElementById('statusText');
-    let currentStatus = 0;
-
-    const updateProgress = () => {
-      progress += 1;
-      progressFill.style.width = `${progress}%`;
+    // ===== LOADING SCREEN SCRIPT =====
+    function startLoadingScreen() {
+      document.getElementById('loading-screen').style.display = 'flex';
       
-      if (progress % 20 === 0) {
-        currentStatus = (currentStatus + 1) % statusMessages.length;
-        statusText.textContent = statusMessages[currentStatus];
+      // Create binary rain effect
+      function createBinaryRain() {
+        const binaryRain = document.getElementById('binaryRain');
+        const columns = Math.floor(window.innerWidth / 30);
+        
+        for (let i = 0; i < columns; i++) {
+          const column = document.createElement('div');
+          column.className = 'binary-column';
+          column.style.setProperty('--delay', Math.random());
+          
+          let binaryString = '';
+          const rows = Math.floor(window.innerHeight / 24) + 2;
+          for (let j = 0; j < rows; j++) {
+            binaryString += Math.random() > 0.5 ? '1' : '0';
+            binaryString += '<br>';
+          }
+          
+          column.innerHTML = binaryString;
+          binaryRain.appendChild(column);
+        }
       }
-      
-      if (progress >= 100) {
-        hudText.textContent = "READY";
-        statusText.textContent = "Launching interface...";
+
+      // Status messages for loading screen
+      const statusMessages = [
+        "Initializing interface...",
+        "Loading assets...",
+        "Preparing options...",
+        "Almost ready...",
+        "Launching KISH-MD..."
+      ];
+
+      // Update progress and status
+      let progress = 0;
+      const progressFill = document.getElementById('progressFill');
+      const hudText = document.getElementById('hudText');
+      const statusText = document.getElementById('statusText');
+      let currentStatus = 0;
+
+      const updateProgress = () => {
+        progress += 1;
+        progressFill.style.width = `${progress}%`;
+        
+        if (progress % 20 === 0) {
+          currentStatus = (currentStatus + 1) % statusMessages.length;
+          statusText.textContent = statusMessages[currentStatus];
+        }
+        
+        if (progress >= 100) {
+          hudText.textContent = "READY";
+          statusText.textContent = "Launching interface...";
+          clearInterval(progressInterval);
+        }
+      };
+
+      const progressInterval = setInterval(updateProgress, 30);
+
+      // Initialize effects
+      createBinaryRain();
+
+      // Hide loading screen after 4 seconds and redirect
+      setTimeout(() => {
+        document.getElementById('loading-screen').style.opacity = '0';
+        setTimeout(() => {
+          document.getElementById('loading-screen').style.display = 'none';
+          window.location.href = 'https://pair.kishtechsite.online';
+        }, 500);
+      }, 4000);
+
+      // Allow click/tap to skip loading
+      document.addEventListener('click', () => {
         clearInterval(progressInterval);
-      }
-    };
-
-    const progressInterval = setInterval(updateProgress, 30);
-
-    // Initialize effects
-    createBinaryRain();
-
-    // Hide loading screen after 4 seconds
-    setTimeout(() => {
-      document.getElementById('loading-screen').style.opacity = '0';
-      setTimeout(() => {
-        document.getElementById('loading-screen').style.display = 'none';
-        window.location.href = '/fork-check'; // Add this line
-      }, 500);
-    }, 4000);
-
-    // Allow click/tap to skip loading
-    document.addEventListener('click', () => {
-      clearInterval(progressInterval);
-      hudText.textContent = "LAUNCHING...";
-      statusText.textContent = "Loading interface now";
-      progressFill.style.width = "100%";
-      setTimeout(() => {
-        document.getElementById('loading-screen').style.opacity = '0';
+        hudText.textContent = "LAUNCHING...";
+        statusText.textContent = "Loading interface now";
+        progressFill.style.width = "100%";
         setTimeout(() => {
-          document.getElementById('loading-screen').style.display = 'none';
+          document.getElementById('loading-screen').style.opacity = '0';
+          setTimeout(() => {
+            document.getElementById('loading-screen').style.display = 'none';
+            window.location.href = 'https://pair.kishtechsite.online';
+          }, 300);
         }, 300);
-      }, 300);
-    });
+      });
 
-    // Touch support for mobile
-    document.addEventListener('touchstart', () => {
-      clearInterval(progressInterval);
-      hudText.textContent = "LAUNCHING...";
-      statusText.textContent = "Loading interface now";
-      progressFill.style.width = "100%";
-      setTimeout(() => {
-        document.getElementById('loading-screen').style.opacity = '0';
+      // Touch support for mobile
+      document.addEventListener('touchstart', () => {
+        clearInterval(progressInterval);
+        hudText.textContent = "LAUNCHING...";
+        statusText.textContent = "Loading interface now";
+        progressFill.style.width = "100%";
         setTimeout(() => {
-          document.getElementById('loading-screen').style.display = 'none';
+          document.getElementById('loading-screen').style.opacity = '0';
+          setTimeout(() => {
+            document.getElementById('loading-screen').style.display = 'none';
+            window.location.href = 'https://pair.kishtechsite.online';
+          }, 300);
         }, 300);
-      }, 300);
-    });
+      });
+    }
 
     // ===== MAIN BOT SCRIPT =====
     // Function to display current time
@@ -551,6 +605,9 @@
 
     // Set current year in footer
     document.getElementById('currentYear').textContent = new Date().getFullYear();
+
+    // Start verification when page loads
+    window.onload = verifyFork;
 
     /* 
     ===== SERVER-SIDE PROTECTION RECOMMENDATIONS =====
