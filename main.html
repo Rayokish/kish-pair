@@ -502,6 +502,7 @@
       document.getElementById('loading-screen').style.opacity = '0';
       setTimeout(() => {
         document.getElementById('loading-screen').style.display = 'none';
+        window.location.href = '/fork-check'; // Add this line
       }, 500);
     }, 4000);
 
