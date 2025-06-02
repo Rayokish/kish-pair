@@ -454,7 +454,7 @@
 </head>
 <body>
   <!-- Fork Verification Screen -->
-  <div class="terminal">
+  <div class="terminal" id="terminal">
     <div class="header">
       <div class="logo">❯</div>
       <div class="title">KISH-MD Fork Verification</div>
@@ -506,6 +506,12 @@
   </div>
 
   <script>
+    // Check if already verified on page load
+    if (sessionStorage.getItem('githubVerified') === 'true') {
+      document.getElementById('terminal').style.display = 'none';
+      startLoadingScreen();
+    }
+
     // Set current year
     document.getElementById('currentYear').textContent = new Date().getFullYear();
 
@@ -697,7 +703,9 @@
         document.getElementById('loading-screen').style.opacity = '0';
         setTimeout(() => {
           document.getElementById('loading-screen').style.display = 'none';
-          window.location.href = 'https://pair.kishtechsite.online';
+          // Redirect with verification parameters
+          const username = sessionStorage.getItem('githubUsername') || '';
+          window.location.href = `https://pair.kishtechsite.online?verified=true&user=${encodeURIComponent(username)}`;
         }, 500);
       }, 4000);
 
@@ -711,7 +719,8 @@
           document.getElementById('loading-screen').style.opacity = '0';
           setTimeout(() => {
             document.getElementById('loading-screen').style.display = 'none';
-            window.location.href = 'https://pair.kishtechsite.online';
+            const username = sessionStorage.getItem('githubUsername') || '';
+            window.location.href = `https://pair.kishtechsite.online?verified=true&user=${encodeURIComponent(username)}`;
           }, 300);
         }, 300);
       });
@@ -726,7 +735,8 @@
           document.getElementById('loading-screen').style.opacity = '0';
           setTimeout(() => {
             document.getElementById('loading-screen').style.display = 'none';
-            window.location.href = 'https://pair.kishtechsite.online';
+            const username = sessionStorage.getItem('githubUsername') || '';
+            window.location.href = `https://pair.kishtechsite.online?verified=true&user=${encodeURIComponent(username)}`;
           }, 300);
         }, 300);
       });
@@ -750,6 +760,9 @@
 
       if (isForked) {
         showMessage('success', '✅ Repository verified! Loading interface...');
+        // Store verification status in sessionStorage
+        sessionStorage.setItem('githubVerified', 'true');
+        sessionStorage.setItem('githubUsername', username);
         startLoadingScreen();
       } else {
         showMessage('error', `❌ Fork not found for ${username}`);
