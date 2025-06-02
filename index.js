@@ -31,6 +31,10 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'main.html'));
 });
 
+app.get('/fork-check', (req, res) => {
+  res.sendFile(path.join(__dirname, 'fork-check.html'));
+});
+
 app.get('/pair', (req, res) => {
   res.sendFile(path.join(__dirname, 'pair.html'));
 });
