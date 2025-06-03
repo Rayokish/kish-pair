@@ -3,235 +3,16 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>KISH-MD Fork Verification</title>
+  <title>KISH-MD</title>
+  <link rel="shortcut icon" href="" type="image/x-icon">
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
   <style>
+    /* ===== LOADING SCREEN STYLES ===== */
     :root {
-      --background: #0d1117;
-      --text: #c9d1d9;
-      --primary: #58a6ff;
-      --success: #3fb950;
-      --error: #f85149;
-      --warning: #d29922;
-      --border: #30363d;
-      --prefix: #7ee787;
-      --cursor: #f0f6fc;
-      --input-bg: #161b22;
-      --selection: rgba(56, 139, 253, 0.3);
       --neon-green: #00ff9d;
       --neon-blue: #00f2ff;
       --neon-purple: #b400ff;
       --dark-bg: #0a0a0a;
-    }
-    
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-    
-    body {
-      background: var(--background);
-      color: var(--text);
-      font-family: 'SF Mono', 'Menlo', 'Monaco', monospace;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 100vh;
-      padding: 20px;
-      line-height: 1.5;
-    }
-    
-    .terminal {
-      background: var(--input-bg);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      width: 100%;
-      max-width: 700px;
-      padding: 24px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-      overflow: hidden;
-    }
-    
-    .header {
-      display: flex;
-      align-items: center;
-      margin-bottom: 20px;
-      color: var(--primary);
-    }
-    
-    .logo {
-      font-size: 24px;
-      margin-right: 10px;
-    }
-    
-    .title {
-      font-weight: bold;
-    }
-    
-    .prompt {
-      color: var(--prefix);
-      margin-bottom: 5px;
-      white-space: pre-wrap;
-    }
-    
-    .command-line {
-      display: flex;
-      align-items: center;
-      margin-bottom: 15px;
-    }
-    
-    .prefix {
-      color: var(--prefix);
-      margin-right: 8px;
-      user-select: none;
-    }
-    
-    input {
-      flex: 1;
-      background: transparent;
-      border: none;
-      color: var(--text);
-      font-family: inherit;
-      font-size: inherit;
-      padding: 5px 0;
-      caret-color: var(--cursor);
-    }
-    
-    input::selection {
-      background: var(--selection);
-    }
-    
-    input:focus {
-      outline: none;
-    }
-    
-    .btn {
-      background: var(--primary);
-      color: var(--background);
-      border: none;
-      padding: 8px 16px;
-      border-radius: 6px;
-      font-family: inherit;
-      font-size: 14px;
-      cursor: pointer;
-      transition: all 0.2s;
-      margin-top: 10px;
-      position: relative;
-      overflow: hidden;
-    }
-    
-    .btn:hover {
-      background: #388bfd;
-    }
-    
-    .btn:active {
-      transform: translateY(1px);
-    }
-    
-    .btn-loading::after {
-      content: "";
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
-      animation: loading 1.5s infinite;
-    }
-    
-    @keyframes loading {
-      0% { transform: translateX(-100%); }
-      100% { transform: translateX(100%); }
-    }
-    
-    .output {
-      margin-top: 20px;
-      min-height: 24px;
-      white-space: pre-wrap;
-    }
-    
-    .success {
-      color: var(--success);
-    }
-    
-    .error {
-      color: var(--error);
-    }
-    
-    .warning {
-      color: var(--warning);
-    }
-    
-    .typing {
-      border-right: 2px solid var(--text);
-      animation: blink 1s step-end infinite;
-    }
-    
-    @keyframes blink {
-      from, to { border-color: transparent; }
-      50% { border-color: var(--text); }
-    }
-    
-    .features {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-top: 25px;
-      font-size: 13px;
-    }
-    
-    .feature {
-      background: rgba(56, 139, 253, 0.15);
-      color: var(--primary);
-      padding: 4px 8px;
-      border-radius: 20px;
-      opacity: 0;
-      transform: translateY(10px);
-      animation: fadeIn 0.3s forwards;
-    }
-    
-    .feature:nth-child(1) { animation-delay: 0.1s; }
-    .feature:nth-child(2) { animation-delay: 0.2s; }
-    .feature:nth-child(3) { animation-delay: 0.3s; }
-    .feature:nth-child(4) { animation-delay: 0.4s; }
-    
-    @keyframes fadeIn {
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
-    }
-    
-    footer {
-      margin-top: 30px;
-      color: #6e7681;
-      font-size: 12px;
-      text-align: center;
-      opacity: 0;
-      animation: fadeIn 0.5s 0.5s forwards;
-    }
-    
-    .progress-bar {
-      height: 2px;
-      background: var(--primary);
-      width: 0;
-      margin-top: 10px;
-      transition: width 0.3s;
-    }
-    
-    .terminal-output {
-      animation: fadeInUp 0.3s;
-    }
-    
-    @keyframes fadeInUp {
-      from {
-        opacity: 0;
-        transform: translateY(5px);
-      }
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
     }
     
     #loading-screen {
@@ -414,6 +195,22 @@
       animation: blink 2s infinite;
     }
 
+    /* Security notice style */
+    .block-notice {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      background: rgba(255,0,0,0.7);
+      color: white;
+      text-align: center;
+      padding: 10px;
+      z-index: 99999;
+      display: none;
+      font-family: 'Share Tech Mono', monospace;
+      font-weight: bold;
+    }
+
     @keyframes rotate {
       0% { transform: rotate(0deg); }
       100% { transform: rotate(360deg); }
@@ -438,215 +235,119 @@
       0%, 100% { opacity: 0.5; }
       50% { opacity: 1; }
     }
-    
-    @media (max-width: 600px) {
-      .terminal {
-        padding: 16px;
+
+    /* ===== MAIN BOT STYLES ===== */
+    body {
+      background-color: black;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+      color: white;
+      font-family: Arial, sans-serif;
+    }
+
+    .button-container {
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      opacity: 0;
+      animation: fadeIn 1s forwards 4s;
+    }
+
+    h3 {
+      margin-top: -40px;
+      opacity: 0;
+      animation: fadeIn 3s forwards;
+    }
+
+    .button {
+      width: 140px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 0px 15px;
+      background-color: red;
+      border-radius: 10px;
+      border: none;
+      color: white;
+      position: relative;
+      cursor: pointer;
+      font-weight: 900;
+      transition-duration: .2s;
+      background: linear-gradient(0deg, #000, #272727);
+      text-decoration: none;
+    }
+
+    footer {
+      position: fixed;
+      bottom: 0;
+      width: 100%;
+      background-color: #222;
+      color: #fff;
+      padding: 10px 0;
+      text-align: center;
+      font-size: 14px;
+    }
+
+    .button:before, .button:after {
+      content: '';
+      position: absolute;
+      left: -2px;
+      top: -2px;
+      border-radius: 10px;
+      background: linear-gradient(45deg, #48ff00, #15ff00, #000000,#000000, #ff0000);
+      background-size: 400%;
+      width: calc(100% + 4px);
+      height: calc(100% + 4px);
+      z-index: -1;
+      animation: steam 10s linear infinite;
+    }
+
+    @keyframes steam {
+      0% {
+        background-position: 0 0;
       }
-      .header {
-        font-size: 14px;
+      50% {
+        background-position: 400% 0;
+      }
+      100% {
+        background-position: 0 0;
+      }
+    }
+
+    .button:after {
+      filter: blur(50px);
+    }
+
+    .button span {
+      z-index: 1;
+    }
+
+    @keyframes fadeIn {
+      to {
+        opacity: 1;
       }
     }
   </style>
-</head>
-<body>
-  <!-- Fork Verification Screen -->
-  <div class="terminal" id="terminal">
-    <div class="header">
-      <div class="logo">❯</div>
-      <div class="title">KISH-MD Fork Verification</div>
-    </div>
-    
-    <div id="welcome-prompt" class="prompt"></div>
-    
-    <div class="command-line">
-      <span class="prefix">$</span>
-      <input type="text" id="githubUsername" placeholder="" 
-             onkeypress="if(event.key === 'Enter') isForked()">
-    </div>
-    
-    <button id="verify-btn" class="btn" onclick="isForked()">Run Verification</button>
-    <div class="progress-bar" id="progress-bar"></div>
-    
-    <div id="message" class="output"></div>
-    
-    <div class="features">
-      <div class="feature">Multi-Device</div>
-      <div class="feature">AI Powered</div>
-      <div class="feature">200+ Commands</div>
-      <div class="feature">Secure</div>
-    </div>
-    
-    <footer>
-      KISH-MD &copy; <span id="currentYear"></span> | Powered by BrashoKish
-    </footer>
-  </div>
-
-  <!-- Loading Screen -->
-  <div id="loading-screen">
-    <div class="grid-overlay"></div>
-    <div class="binary-rain" id="binaryRain"></div>
-    <div class="cyber-container">
-      <div class="cyber-border"></div>
-      <div class="glow-effect"></div>
-      <div class="cyber-loader">
-        <div class="cyber-spinner"></div>
-        <div class="scan-lines"></div>
-        <div class="hud-text" id="hudText">KISH-MD LOADING</div>
-        <div class="status-text" id="statusText">Initializing interface...</div>
-        <div class="progress-container">
-          <div class="progress-fill" id="progressFill"></div>
-        </div>
-      </div>
-      <div class="redirect-notice">Preparing KISH-MD interface...</div>
-    </div>
-  </div>
-
   <script>
-    // Check verification status on page load
-    const urlParams = new URLSearchParams(window.location.search);
-    const isVerified = urlParams.get('verified') === 'true' || sessionStorage.getItem('githubVerified') === 'true';
-    
-    if (isVerified) {
-      // Store verification if coming from URL params
-      if (urlParams.get('verified') === 'true') {
-        sessionStorage.setItem('githubVerified', 'true');
-        sessionStorage.setItem('githubUsername', urlParams.get('user') || '');
-        
-        // Redirect to clean URL after 1 second
-        setTimeout(() => {
-          window.location.href = 'https://pair.kishtechsite.online';
-        }, 1000);
-      }
-      
-      // Hide terminal and show loading
-      document.getElementById('terminal').style.display = 'none';
-      startLoadingScreen();
-    }
-
-    // Set current year
-    document.getElementById('currentYear').textContent = new Date().getFullYear();
-
-    // Welcome messages animation
-    const welcomeMessages = [
-      "Welcome to KISH-MD Fork Verification",
-      "Please verify your GitHub fork to proceed with pairing",
-      "Enter your GitHub username below ↓"
-    ];
-    
-    const welcomePrompt = document.getElementById('welcome-prompt');
-    const input = document.getElementById('githubUsername');
-    const verifyBtn = document.getElementById('verify-btn');
-    const progressBar = document.getElementById('progress-bar');
-    
-    // Type welcome messages
-    async function typeWelcomeMessages() {
-      for (const message of welcomeMessages) {
-        await typeText(welcomePrompt, message);
-        await delay(500);
-        welcomePrompt.innerHTML += '<br><br>';
-      }
-      typeInputPlaceholder();
-    }
-    
-    // Type text with cursor
-    async function typeText(element, text) {
-      element.innerHTML = '';
-      const cursor = document.createElement('span');
-      cursor.className = 'typing';
-      element.appendChild(cursor);
-      
-      for (let i = 0; i < text.length; i++) {
-        cursor.remove();
-        element.innerHTML += text[i];
-        element.appendChild(cursor);
-        await delay(Math.random() * 50 + 30);
-      }
-      
-      cursor.remove();
-    }
-    
-    // Type input placeholder
-    async function typeInputPlaceholder() {
-      const placeholderText = "Enter GitHub username and press Enter";
-      input.placeholder = '';
-      
-      for (let i = 0; i < placeholderText.length; i++) {
-        input.placeholder = placeholderText.substring(0, i + 1);
-        await delay(Math.random() * 50 + 30);
-      }
-      
-      input.focus();
-    }
-    
-    // Helper delay function
-    function delay(ms) {
-      return new Promise(resolve => setTimeout(resolve, ms));
-    }
-    
-    // Initialize animations
-    setTimeout(typeWelcomeMessages, 500);
-    
-    // Input focus/blur handlers
-    input.addEventListener('focus', () => {
-      input.placeholder = "Enter GitHub username and press Verification";
-    });
-    
-    input.addEventListener('blur', () => {
-      if (input.value === '') {
-        typeInputPlaceholder();
+    // Check session storage for verification
+    document.addEventListener('DOMContentLoaded', function() {
+      if(!sessionStorage.getItem('forkVerified')) {
+        window.location.href = '/fork-check';
+      } else {
+        // Show loading screen if verified
+        document.getElementById('loading-screen').style.display = 'flex';
+        initializeLoadingScreen();
       }
     });
-    
-    // Show loading state
-    async function showLoading() {
-      verifyBtn.classList.add('btn-loading');
-      verifyBtn.disabled = true;
-      progressBar.style.width = '100%';
-      progressBar.style.transition = 'width 1.5s linear';
-      await delay(1500);
-    }
-    
-    // Hide loading state
-    function hideLoading() {
-      verifyBtn.classList.remove('btn-loading');
-      verifyBtn.disabled = false;
-      progressBar.style.width = '0';
-    }
-    
-    // GitHub API check
-    async function chkfork(username, repon) {
-      const url = `https://api.github.com/repos/${username}/${repon}`;
-      const message = document.getElementById('message');
 
-      try {
-        const response = await fetch(url);
-        if (response.ok) {
-          const data = await response.json();
-          return data.fork;
-        } else {
-          showMessage('error', `❌ Error: GitHub username not found or rate limit exceeded`);
-          return false;
-        }
-      } catch (error) {
-        console.error('Error:', error);
-        showMessage('error', '❌ Network error occurred. Please try again.');
-        return false;
-      }
-    }
-    
-    // Show message
-    function showMessage(type, text) {
-      const message = document.getElementById('message');
-      message.className = 'output terminal-output';
-      message.innerHTML = `<span class="${type}">${text}</span>`;
-    }
-    
-    // Start loading screen
-    function startLoadingScreen() {
-      document.getElementById('loading-screen').style.display = 'flex';
-      
-      // Create binary rain
+    function initializeLoadingScreen() {
+      // Create binary rain effect
       function createBinaryRain() {
         const binaryRain = document.getElementById('binaryRain');
         const columns = Math.floor(window.innerWidth / 30);
@@ -668,7 +369,7 @@
         }
       }
 
-      // Status messages
+      // Status messages for loading screen
       const statusMessages = [
         "Initializing interface...",
         "Loading assets...",
@@ -677,7 +378,7 @@
         "Launching KISH-MD..."
       ];
 
-      // Update progress
+      // Update progress and status
       let progress = 0;
       const progressFill = document.getElementById('progressFill');
       const hudText = document.getElementById('hudText');
@@ -705,54 +406,164 @@
       // Initialize effects
       createBinaryRain();
 
-      // Skip loading on click/tap
-      const completeLoading = () => {
-        clearInterval(progressInterval);
+      // Hide loading screen after 4 seconds and redirect
+      setTimeout(() => {
         document.getElementById('loading-screen').style.opacity = '0';
         setTimeout(() => {
           document.getElementById('loading-screen').style.display = 'none';
-          if (!isVerified) {
+          window.location.href = 'https://pair.kishtechsite.online';
+        }, 500);
+      }, 4000);
+
+      // Allow click/tap to skip loading
+      document.addEventListener('click', () => {
+        clearInterval(progressInterval);
+        hudText.textContent = "LAUNCHING...";
+        statusText.textContent = "Loading interface now";
+        progressFill.style.width = "100%";
+        setTimeout(() => {
+          document.getElementById('loading-screen').style.opacity = '0';
+          setTimeout(() => {
+            document.getElementById('loading-screen').style.display = 'none';
             window.location.href = 'https://pair.kishtechsite.online';
-          }
+          }, 300);
         }, 300);
-      };
+      });
 
-      document.addEventListener('click', completeLoading);
-      document.addEventListener('touchstart', completeLoading);
+      // Touch support for mobile
+      document.addEventListener('touchstart', () => {
+        clearInterval(progressInterval);
+        hudText.textContent = "LAUNCHING...";
+        statusText.textContent = "Loading interface now";
+        progressFill.style.width = "100%";
+        setTimeout(() => {
+          document.getElementById('loading-screen').style.opacity = '0';
+          setTimeout(() => {
+            document.getElementById('loading-screen').style.display = 'none';
+            window.location.href = 'https://pair.kishtechsite.online';
+          }, 300);
+        }, 300);
+      });
     }
+
+    // ===== SECURITY CONFIGURATION =====
+    const SHOW_ALERTS = false; // Set to true to show alert messages
     
-    // Main verification function
-    async function isForked() {
-      const username = document.getElementById('githubUsername').value.trim();
-
-      if (!username) {
-        showMessage('error', '❌ Please enter your GitHub username');
-        return;
-      }
-
-      showMessage('warning', `Verifying fork for ${username}...`);
-      await showLoading();
-      
-      const isForked = await chkfork(username, 'Kish-MD');
-      hideLoading();
-
-      if (isForked) {
-        showMessage('success', '✅ Repository verified! Loading interface...');
-        sessionStorage.setItem('githubVerified', 'true');
-        sessionStorage.setItem('githubUsername', username);
-        startLoadingScreen();
-      } else {
-        showMessage('error', `❌ Fork not found for ${username}`);
-        if (confirm("❌ You haven't forked Kish-MD repository. Press OK to fork it now (don't modify the fork name).")) {
-          window.open('https://github.com/Brashokish/Kish-MD/fork', '_blank');
-        }
+    // Silent blocking notification system
+    function showBlockNotice(message) {
+      if (!SHOW_ALERTS) {
+        const notice = document.getElementById('blockNotice');
+        notice.textContent = message;
+        notice.style.display = 'block';
+        setTimeout(() => notice.style.display = 'none', 2000);
       }
     }
-    
-    // Focus input when clicking terminal
-    document.querySelector('.terminal').addEventListener('click', () => {
-      input.focus();
+
+    // ===== ANTI-COPY PROTECTION =====
+    // Disable right-click
+    document.addEventListener('contextmenu', function(e) {
+      e.preventDefault();
+      if (SHOW_ALERTS) alert('Right-click is disabled');
+      else showBlockNotice('Right-click disabled');
     });
+
+    // Disable text selection
+    document.addEventListener('selectstart', function(e) {
+      e.preventDefault();
+    });
+
+    // Disable keyboard shortcuts
+    document.addEventListener('keydown', function(e) {
+      // Ctrl+U (View source)
+      if (e.ctrlKey && e.keyCode === 85) {
+        e.preventDefault();
+        if (SHOW_ALERTS) alert('View source is disabled');
+        else showBlockNotice('Source viewing disabled');
+      }
+      // Ctrl+Shift+I/F12 (DevTools)
+      else if ((e.ctrlKey && e.shiftKey && e.keyCode === 73) || e.keyCode === 123) {
+        e.preventDefault();
+        if (SHOW_ALERTS) alert('Developer tools are disabled');
+        else showBlockNotice('Developer tools restricted');
+      }
+      // Ctrl+C (Copy)
+      else if (e.ctrlKey && e.keyCode === 67) {
+        e.preventDefault();
+        if (SHOW_ALERTS) alert('Copying is disabled');
+        else showBlockNotice('Copy protection active');
+      }
+      // Ctrl+S (Save page)
+      else if (e.ctrlKey && e.keyCode === 83) {
+        e.preventDefault();
+        if (SHOW_ALERTS) alert('Page saving is disabled');
+        else showBlockNotice('Save function disabled');
+      }
+    });
+
+    // Anti-iframe protection
+    if (window.top !== window.self) {
+      window.top.location = window.self.location;
+    }
+
+    // ===== MAIN BOT SCRIPT =====
+    // Function to display current time
+    function updateTime() {
+      const now = new Date();
+      const hours = now.getHours().toString().padStart(2, '0');
+      const minutes = now.getMinutes().toString().padStart(2, '0');
+      const seconds = now.getSeconds().toString().padStart(2, '0');
+      const time = `${hours}:${minutes}:${seconds}`;
+      document.getElementById('clock').innerText = time;
+    }
+
+    // Update the clock every second
+    setInterval(updateTime, 1000);
+    updateTime();
+
+    // Set current year in footer
+    document.getElementById('currentYear').textContent = new Date().getFullYear();
   </script>
+</head>
+<body>
+  <!-- Security Notice (for silent blocking) -->
+  <div id="blockNotice" class="block-notice">Security restriction activated</div>
+
+  <!-- Loading Screen -->
+  <div id="loading-screen">
+    <div class="grid-overlay"></div>
+    <div class="binary-rain" id="binaryRain"></div>
+    <div class="cyber-container">
+      <div class="cyber-border"></div>
+      <div class="glow-effect"></div>
+      <div class="cyber-loader">
+        <div class="cyber-spinner"></div>
+        <div class="scan-lines"></div>
+        <div class="hud-text" id="hudText">KISH-MD LOADING</div>
+        <div class="status-text" id="statusText">Initializing interface...</div>
+        <div class="progress-container">
+          <div class="progress-fill" id="progressFill"></div>
+        </div>
+      </div>
+      <div class="redirect-notice">Preparing KISH-MD interface...</div>
+    </div>
+  </div>
+
+  <!-- Main Bot Content (hidden initially) -->
+  <div class="button-container">
+    <h3>SELECT AN OPTION </h3>
+    <div></div>
+    <a href="/pair" class="button" target="_blank"> <span>PAIR CODE</span> </a> <br>
+    <a href="/qr" class="button" target="_blank"> <span>QR CODE</span> </a> <br>
+    <a href="https://github.com/Brashokish/Kish-MD/fork" class="button" target="_blank"> <span>FORK KISH-MD</span> </a> <br>
+    <a href="https://whatsapp.com/channel/0029VabXGW8BKfhwAKCfBp0o" class="button" target="_blank"> <span>WhatsApp</span> </a> <br>
+
+    <p>FACE ANY ISSUES CLICK ERROR BUTTON</p>
+    <a href="https://wa.me/254796307638" class="button" target="_blank"> <span>ERROR</span> </a> <br>
+
+    <footer>
+      KISH-MD &copy; <span id="currentYear"></span>
+    </footer>
+    <div id="clock"></div>
+  </div>
 </body>
 </html>
