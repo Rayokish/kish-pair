@@ -1,39 +1,57 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>KISH-MD PAIR CODE</title>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KISH-MD Pair Code</title>
   <style>
+    :root {
+      --background: #0d1117;
+      --text: #c9d1d9;
+      --primary: #58a6ff;
+      --success: #3fb950;
+      --error: #f85149;
+      --warning: #d29922;
+      --border: #30363d;
+      --prefix: #7ee787;
+      --cursor: #f0f6fc;
+      --input-bg: #161b22;
+      --selection: rgba(56, 139, 253, 0.3);
+      --cyan: #0ff;
+      --magenta: #f0f;
+    }
+    
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    
     body {
+      background: var(--background);
+      color: var(--text);
+      font-family: 'SF Mono', 'Menlo', 'Monaco', monospace;
       display: flex;
       justify-content: center;
       align-items: center;
-      height: 100vh;
-      margin: 0;
-      background-color: #000;
-      font-family: 'Courier New', monospace;
+      min-height: 100vh;
+      padding: 20px;
+      line-height: 1.5;
+    }
+    
+    .terminal {
+      background: var(--input-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      width: 100%;
+      max-width: 700px;
+      padding: 24px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
       overflow: hidden;
-    }
-
-    .container {
       position: relative;
-      z-index: 2;
     }
-
-    .box {
-      width: 320px;
-      padding: 30px;
-      background-color: rgba(0, 0, 0, 0.7);
-      border-radius: 15px;
-      border: 2px solid #0ff;
-      box-shadow: 0 0 20px #0ff, 0 0 40px #0ff inset;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .box::before {
+    
+    .terminal::before {
       content: '';
       position: absolute;
       top: -50%;
@@ -42,7 +60,7 @@
       height: 200%;
       background: linear-gradient(
         to bottom right,
-        rgba(0, 255, 255, 0.1),
+        rgba(0, 255, 255, 0.05),
         rgba(0, 255, 255, 0) 50%
       );
       transform: rotate(30deg);
@@ -50,105 +68,206 @@
       pointer-events: none;
       z-index: 0;
     }
-
+    
     @keyframes shine {
       0% { transform: rotate(30deg) translate(-30%, -30%); }
       100% { transform: rotate(30deg) translate(30%, 30%); }
     }
-
-    h2 {
-      color: #0ff;
-      text-align: center;
-      font-size: 28px;
-      margin-bottom: 20px;
-      text-shadow: 0 0 10px #0ff, 0 0 20px #0ff;
-      animation: pulse 2s infinite alternate;
-    }
-
-    h6 {
-      color: #f0f;
-      text-align: center;
-      font-size: 14px;
-      margin-bottom: 25px;
-      text-shadow: 0 0 5px #f0f, 0 0 10px #f0f;
-      animation: pulse 2s infinite alternate-reverse;
-    }
-
-    @keyframes pulse {
-      0% { opacity: 0.8; text-shadow: 0 0 5px currentColor; }
-      100% { opacity: 1; text-shadow: 0 0 20px currentColor, 0 0 30px currentColor; }
-    }
-
-    .input-container {
+    
+    .header {
       display: flex;
+      align-items: center;
       margin-bottom: 20px;
-      border-radius: 25px;
-      overflow: hidden;
-      box-shadow: 0 0 15px rgba(0, 255, 255, 0.5);
+      color: var(--primary);
     }
-
-    .input-container input {
-      flex: 1;
-      padding: 15px;
-      border: none;
-      background: rgba(0, 0, 0, 0.7);
-      color: #0ff;
-      font-size: 16px;
-      border: 1px solid #0ff;
-      border-right: none;
-      outline: none;
-      text-shadow: 0 0 5px #0ff;
-      z-index: 1;
+    
+    .logo {
+      font-size: 24px;
+      margin-right: 10px;
     }
-
-    .input-container button {
-      padding: 15px 20px;
-      background: linear-gradient(45deg, #0ff, #f0f);
-      color: #000;
-      border: none;
+    
+    .title {
       font-weight: bold;
-      cursor: pointer;
-      transition: all 0.3s;
     }
-
-    .input-container button:hover {
-      background: linear-gradient(45deg, #f0f, #0ff);
-      box-shadow: 0 0 20px #f0f;
+    
+    .prompt {
+      color: var(--prefix);
+      margin-bottom: 5px;
+      white-space: pre-wrap;
     }
-
-    #waiting-message {
-      display: none;
-      color: #0ff;
-      text-align: center;
-      margin: 15px 0;
-      text-shadow: 0 0 10px #0ff;
-      animation: pulse 1.5s infinite;
+    
+    .command-line {
+      display: flex;
+      align-items: center;
+      margin-bottom: 15px;
     }
-
-    #pair {
-      color: #f0f;
-      text-align: center;
-      margin-top: 20px;
-      font-size: 18px;
-      text-shadow: 0 0 10px #f0f;
-      min-height: 50px;
+    
+    .prefix {
+      color: var(--prefix);
+      margin-right: 8px;
+      user-select: none;
     }
-
-    .powered-by {
-      margin-top: 30px;
-      text-align: center;
-      color: #fff;
+    
+    input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: var(--text);
+      font-family: inherit;
+      font-size: inherit;
+      padding: 5px 0;
+      caret-color: var(--cursor);
+    }
+    
+    input::selection {
+      background: var(--selection);
+    }
+    
+    input:focus {
+      outline: none;
+    }
+    
+    .btn {
+      background: var(--primary);
+      color: var(--background);
+      border: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-family: inherit;
       font-size: 14px;
-      text-shadow: 0 0 5px #fff;
-      animation: colorChange 5s infinite;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-top: 10px;
+      position: relative;
+      overflow: hidden;
     }
-
-    @keyframes colorChange {
-      0% { color: #0ff; text-shadow: 0 0 5px #0ff; }
-      50% { color: #f0f; text-shadow: 0 0 5px #f0f; }
-      100% { color: #0ff; text-shadow: 0 0 5px #0ff; }
+    
+    .btn:hover {
+      background: #388bfd;
     }
-
+    
+    .btn:active {
+      transform: translateY(1px);
+    }
+    
+    .btn-loading::after {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+      animation: loading 1.5s infinite;
+    }
+    
+    @keyframes loading {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(100%); }
+    }
+    
+    .output {
+      margin-top: 20px;
+      min-height: 24px;
+      white-space: pre-wrap;
+    }
+    
+    .success {
+      color: var(--success);
+    }
+    
+    .error {
+      color: var(--error);
+    }
+    
+    .warning {
+      color: var(--warning);
+    }
+    
+    .cyan {
+      color: var(--cyan);
+      text-shadow: 0 0 5px var(--cyan);
+    }
+    
+    .magenta {
+      color: var(--magenta);
+      text-shadow: 0 0 5px var(--magenta);
+    }
+    
+    .typing {
+      border-right: 2px solid var(--text);
+      animation: blink 1s step-end infinite;
+    }
+    
+    @keyframes blink {
+      from, to { border-color: transparent; }
+      50% { border-color: var(--text); }
+    }
+    
+    .features {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 25px;
+      font-size: 13px;
+    }
+    
+    .feature {
+      background: rgba(56, 139, 253, 0.15);
+      color: var(--primary);
+      padding: 4px 8px;
+      border-radius: 20px;
+      opacity: 0;
+      transform: translateY(10px);
+      animation: fadeIn 0.3s forwards;
+    }
+    
+    .feature:nth-child(1) { animation-delay: 0.1s; }
+    .feature:nth-child(2) { animation-delay: 0.2s; }
+    .feature:nth-child(3) { animation-delay: 0.3s; }
+    .feature:nth-child(4) { animation-delay: 0.4s; }
+    
+    @keyframes fadeIn {
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    
+    footer {
+      margin-top: 30px;
+      color: #6e7681;
+      font-size: 12px;
+      text-align: center;
+      opacity: 0;
+      animation: fadeIn 0.5s 0.5s forwards;
+    }
+    
+    .progress-bar {
+      height: 2px;
+      background: var(--primary);
+      width: 0;
+      margin-top: 10px;
+      transition: width 0.3s;
+    }
+    
+    /* Terminal output animations */
+    .terminal-output {
+      animation: fadeInUp 0.3s;
+    }
+    
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(5px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    
+    /* Scanlines effect */
     .scanlines {
       position: fixed;
       top: 0;
@@ -165,90 +284,227 @@
       z-index: 0;
       animation: scanline 10s linear infinite;
     }
-
+    
     @keyframes scanline {
       0% { background-position: 0 0; }
       100% { background-position: 0 100%; }
+    }
+    
+    /* Responsive adjustments */
+    @media (max-width: 600px) {
+      .terminal {
+        padding: 16px;
+      }
+      .header {
+        font-size: 14px;
+      }
     }
   </style>
 </head>
 <body>
   <div class="scanlines"></div>
-  <div class="container">
-    <div class="box">
-      <h2>KISH-MD PAIR</h2>
-      <h6>⚙ Enter your number with country code ⚙</h6>
-      <div class="input-container">
-        <input type="text" id="number" placeholder="+1234567890" inputmode="numeric">
-        <button id="submit">ENTER</button>
-      </div>
-      <a id="waiting-message" class="centered-text">in process...</a>
-      <main id="pair"></main>
-      <div class="powered-by">Powered by KISH-MD</div>
+  <div class="terminal">
+    <div class="header">
+      <div class="logo">❯</div>
+      <div class="title">KISH-MD Pair Code</div>
     </div>
+    
+    <div id="welcome-prompt" class="prompt"></div>
+    
+    <div class="command-line">
+      <span class="prefix">$</span>
+      <input type="text" id="whatsappNumber" placeholder="" 
+             onkeypress="if(event.key === 'Enter') getPairCode()">
+    </div>
+    
+    <button id="submit-btn" class="btn" onclick="getPairCode()">Get Pair Code</button>
+    <div class="progress-bar" id="progress-bar"></div>
+    
+    <div id="message" class="output"></div>
+    <div id="pair-code" class="output cyan"></div>
+    
+    <div class="features">
+      <div class="feature">Multi-Device</div>
+      <div class="feature">AI Powered</div>
+      <div class="feature">200+ Commands</div>
+      <div class="feature">Secure</div>
+    </div>
+    
+    <footer>
+      KISH-MD &copy; <span id="currentYear"></span> | Powered by BrashoKish
+    </footer>
   </div>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/1.0.0-alpha.1/axios.min.js"></script>
   <script>
-    let pairElement = document.getElementById("pair");
-    let submitButton = document.getElementById("submit");
-    let numberInput = document.getElementById("number");
-    let waitingMessage = document.getElementById("waiting-message");
+    // Set current year
+    document.getElementById('currentYear').textContent = new Date().getFullYear();
 
-    numberInput.addEventListener('input', function(e) {
+    // Animated welcome message
+    const welcomeMessages = [
+      "Welcome to KISH-MD Pair Code Generator",
+      "Please enter your WhatsApp number with country code",
+      "Example: +1234567890"
+    ];
+    
+    const welcomePrompt = document.getElementById('welcome-prompt');
+    const input = document.getElementById('whatsappNumber');
+    const submitBtn = document.getElementById('submit-btn');
+    const progressBar = document.getElementById('progress-bar');
+    const message = document.getElementById('message');
+    const pairCode = document.getElementById('pair-code');
+    
+    // Type welcome messages one by one
+    async function typeWelcomeMessages() {
+      for (const message of welcomeMessages) {
+        await typeText(welcomePrompt, message);
+        await delay(500);
+        welcomePrompt.innerHTML += '<br><br>';
+      }
+      // Start input placeholder animation after welcome messages
+      typeInputPlaceholder();
+    }
+    
+    // Type text with cursor animation
+    async function typeText(element, text) {
+      element.innerHTML = '';
+      const cursor = document.createElement('span');
+      cursor.className = 'typing';
+      element.appendChild(cursor);
+      
+      for (let i = 0; i < text.length; i++) {
+        cursor.remove();
+        element.innerHTML += text[i];
+        element.appendChild(cursor);
+        await delay(Math.random() * 50 + 30);
+      }
+      
+      cursor.remove();
+    }
+    
+    // Type input placeholder
+    async function typeInputPlaceholder() {
+      const placeholderText = "Enter WhatsApp number with country code";
+      input.placeholder = '';
+      
+      for (let i = 0; i < placeholderText.length; i++) {
+        input.placeholder = placeholderText.substring(0, i + 1);
+        await delay(Math.random() * 50 + 30);
+      }
+      
+      // Add blinking cursor effect
+      input.focus();
+    }
+    
+    // Helper function for delays
+    function delay(ms) {
+      return new Promise(resolve => setTimeout(resolve, ms));
+    }
+    
+    // Initialize animations
+    setTimeout(typeWelcomeMessages, 500);
+    
+    // Reset placeholder animation when input is focused/blurred
+    input.addEventListener('focus', () => {
+      input.placeholder = "Enter WhatsApp number with country code";
+    });
+    
+    input.addEventListener('blur', () => {
+      if (input.value === '') {
+        typeInputPlaceholder();
+      }
+    });
+    
+    // Validate phone number input
+    input.addEventListener('input', function(e) {
       this.value = this.value.replace(/[^0-9+]/g, '');
     });
-
-    async function copyCode() {
-      let text = document.getElementById("copy").innerText;
-      await navigator.clipboard.writeText(text.replace('CODE: ', ''));
-      document.getElementById("copy").innerText = "COPIED!";
-      setTimeout(() => {
-        document.getElementById("copy").innerText = text;
-      }, 1000);
+    
+    // Show loading state during verification
+    async function showLoading() {
+      submitBtn.classList.add('btn-loading');
+      submitBtn.disabled = true;
+      
+      // Animate progress bar
+      progressBar.style.width = '100%';
+      progressBar.style.transition = 'width 1.5s linear';
+      
+      await delay(1500);
     }
-
-    submitButton.addEventListener("click", async (e) => {
-      e.preventDefault();
-      waitingMessage.style.display = "block";
-
-      if (!numberInput.value) {
-        pairElement.innerHTML = '<span style="color:#f0f; text-shadow:0 0 10px #f0f;">❗ Enter your WhatsApp number</span>';
-        waitingMessage.style.display = "none";
+    
+    // Hide loading state
+    function hideLoading() {
+      submitBtn.classList.remove('btn-loading');
+      submitBtn.disabled = false;
+      progressBar.style.width = '0';
+    }
+    
+    // Show animated message
+    function showMessage(type, text) {
+      message.className = 'output terminal-output';
+      message.innerHTML = `<span class="${type}">${text}</span>`;
+    }
+    
+    // Copy to clipboard function
+    async function copyToClipboard(text) {
+      try {
+        await navigator.clipboard.writeText(text);
+        return true;
+      } catch (err) {
+        console.error('Failed to copy: ', err);
+        return false;
+      }
+    }
+    
+    // Main function to get pair code
+    async function getPairCode() {
+      const number = document.getElementById('whatsappNumber').value.trim();
+      
+      if (!number) {
+        showMessage('error', '❌ Please enter your WhatsApp number');
         return;
       }
 
-      const cleanNumber = numberInput.value.replace(/[^0-9]/g, "");
+      const cleanNumber = number.replace(/[^0-9]/g, "");
 
       if (cleanNumber.length < 11) {
-        pairElement.innerHTML = '<span style="color:#f0f; text-shadow:0 0 10px #f0f;">❌ Invalid number format</span>';
-        waitingMessage.style.display = "none";
+        showMessage('error', '❌ Invalid number format (include country code)');
         return;
       }
 
+      showMessage('warning', `⏳ Generating pair code for ${number}...`);
+      await showLoading();
+      
       try {
-        const formattedNumber = `+${cleanNumber.substring(0, 3)} ${cleanNumber.substring(3, 8)} ${cleanNumber.substring(8)}`;
-        numberInput.value = formattedNumber;
-
-        const { data } = await axios.get(`/code?number=${cleanNumber}`);
+        // Make API call to get pair code
+        const response = await fetch(`/code?number=${cleanNumber}`);
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
         const code = data.code || "Service Unavailable";
-
-        pairElement.innerHTML = `
-          <div id="copy" onclick="copyCode()" style="cursor: pointer; color:#f0f; text-shadow:0 0 10px #f0f;">
-            CODE: <span style="color:#0ff; text-shadow:0 0 10px #0ff;">${code}</span>
+        
+        pairCode.innerHTML = `
+          <div class="terminal-output" onclick="copyToClipboard('${code}')" 
+               style="cursor: pointer; color: var(--cyan);">
+            Pair Code: <span class="magenta">${code}</span> (click to copy)
           </div>
         `;
+        
+        showMessage('success', '✅ Pair code generated successfully!');
       } catch (error) {
-        pairElement.innerHTML = '<span style="color:#f0f; text-shadow:0 0 10px #f0f;">⚠️ Connection Error</span>';
+        console.error('Error fetching pair code:', error);
+        showMessage('error', '⚠️ Error generating pair code. Please try again.');
+        pairCode.innerHTML = '';
       } finally {
-        waitingMessage.style.display = "none";
+        hideLoading();
       }
-    });
-
-    numberInput.addEventListener("keypress", function(event) {
-      if (event.key === "Enter") {
-        submitButton.click();
-      }
+    }
+    
+    // Allow clicking anywhere in terminal to focus input
+    document.querySelector('.terminal').addEventListener('click', () => {
+      input.focus();
     });
   </script>
 </body>
