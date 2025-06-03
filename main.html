@@ -219,7 +219,6 @@
       transition: width 0.3s;
     }
     
-    /* Terminal output animations */
     .terminal-output {
       animation: fadeInUp 0.3s;
     }
@@ -235,7 +234,6 @@
       }
     }
     
-    /* Loading screen styles */
     #loading-screen {
       position: fixed;
       top: 0;
@@ -441,7 +439,6 @@
       50% { opacity: 1; }
     }
     
-    /* Responsive adjustments */
     @media (max-width: 600px) {
       .terminal {
         padding: 16px;
@@ -485,7 +482,7 @@
     </footer>
   </div>
 
-  <!-- Loading Screen (hidden initially) -->
+  <!-- Loading Screen -->
   <div id="loading-screen">
     <div class="grid-overlay"></div>
     <div class="binary-rain" id="binaryRain"></div>
@@ -506,8 +503,23 @@
   </div>
 
   <script>
-    // Check if already verified on page load
-    if (sessionStorage.getItem('githubVerified') === 'true') {
+    // Check verification status on page load
+    const urlParams = new URLSearchParams(window.location.search);
+    const isVerified = urlParams.get('verified') === 'true' || sessionStorage.getItem('githubVerified') === 'true';
+    
+    if (isVerified) {
+      // Store verification if coming from URL params
+      if (urlParams.get('verified') === 'true') {
+        sessionStorage.setItem('githubVerified', 'true');
+        sessionStorage.setItem('githubUsername', urlParams.get('user') || '');
+        
+        // Redirect to clean URL after 1 second
+        setTimeout(() => {
+          window.location.href = 'https://pair.kishtechsite.online';
+        }, 1000);
+      }
+      
+      // Hide terminal and show loading
       document.getElementById('terminal').style.display = 'none';
       startLoadingScreen();
     }
@@ -515,7 +527,7 @@
     // Set current year
     document.getElementById('currentYear').textContent = new Date().getFullYear();
 
-    // Animated welcome message
+    // Welcome messages animation
     const welcomeMessages = [
       "Welcome to KISH-MD Fork Verification",
       "Please verify your GitHub fork to proceed with pairing",
@@ -527,18 +539,17 @@
     const verifyBtn = document.getElementById('verify-btn');
     const progressBar = document.getElementById('progress-bar');
     
-    // Type welcome messages one by one
+    // Type welcome messages
     async function typeWelcomeMessages() {
       for (const message of welcomeMessages) {
         await typeText(welcomePrompt, message);
         await delay(500);
         welcomePrompt.innerHTML += '<br><br>';
       }
-      // Start input placeholder animation after welcome messages
       typeInputPlaceholder();
     }
     
-    // Type text with cursor animation
+    // Type text with cursor
     async function typeText(element, text) {
       element.innerHTML = '';
       const cursor = document.createElement('span');
@@ -565,11 +576,10 @@
         await delay(Math.random() * 50 + 30);
       }
       
-      // Add blinking cursor effect
       input.focus();
     }
     
-    // Helper function for delays
+    // Helper delay function
     function delay(ms) {
       return new Promise(resolve => setTimeout(resolve, ms));
     }
@@ -577,7 +587,7 @@
     // Initialize animations
     setTimeout(typeWelcomeMessages, 500);
     
-    // Reset placeholder animation when input is focused/blurred
+    // Input focus/blur handlers
     input.addEventListener('focus', () => {
       input.placeholder = "Enter GitHub username and press Verification";
     });
@@ -588,15 +598,12 @@
       }
     });
     
-    // Show loading state during verification
+    // Show loading state
     async function showLoading() {
       verifyBtn.classList.add('btn-loading');
       verifyBtn.disabled = true;
-      
-      // Animate progress bar
       progressBar.style.width = '100%';
       progressBar.style.transition = 'width 1.5s linear';
-      
       await delay(1500);
     }
     
@@ -628,18 +635,18 @@
       }
     }
     
-    // Show animated message
+    // Show message
     function showMessage(type, text) {
       const message = document.getElementById('message');
       message.className = 'output terminal-output';
       message.innerHTML = `<span class="${type}">${text}</span>`;
     }
     
-    // Start loading screen animation
+    // Start loading screen
     function startLoadingScreen() {
       document.getElementById('loading-screen').style.display = 'flex';
       
-      // Create binary rain effect
+      // Create binary rain
       function createBinaryRain() {
         const binaryRain = document.getElementById('binaryRain');
         const columns = Math.floor(window.innerWidth / 30);
@@ -661,7 +668,7 @@
         }
       }
 
-      // Status messages for loading screen
+      // Status messages
       const statusMessages = [
         "Initializing interface...",
         "Loading assets...",
@@ -670,7 +677,7 @@
         "Launching KISH-MD..."
       ];
 
-      // Update progress and status
+      // Update progress
       let progress = 0;
       const progressFill = document.getElementById('progressFill');
       const hudText = document.getElementById('hudText');
@@ -698,54 +705,25 @@
       // Initialize effects
       createBinaryRain();
 
-      // Hide loading screen after 4 seconds and redirect
-      setTimeout(() => {
+      // Skip loading on click/tap
+      const completeLoading = () => {
+        clearInterval(progressInterval);
         document.getElementById('loading-screen').style.opacity = '0';
         setTimeout(() => {
           document.getElementById('loading-screen').style.display = 'none';
-          // Redirect with verification parameters
-          const username = sessionStorage.getItem('githubUsername') || '';
-          window.location.href = `https://pair.kishtechsite.online?verified=true&user=${encodeURIComponent(username)}`;
-        }, 500);
-      }, 4000);
-
-      // Allow click/tap to skip loading
-      document.addEventListener('click', () => {
-        clearInterval(progressInterval);
-        hudText.textContent = "LAUNCHING...";
-        statusText.textContent = "Loading interface now";
-        progressFill.style.width = "100%";
-        setTimeout(() => {
-          document.getElementById('loading-screen').style.opacity = '0';
-          setTimeout(() => {
-            document.getElementById('loading-screen').style.display = 'none';
-            const username = sessionStorage.getItem('githubUsername') || '';
-            window.location.href = `https://pair.kishtechsite.online?verified=true&user=${encodeURIComponent(username)}`;
-          }, 300);
+          if (!isVerified) {
+            window.location.href = 'https://pair.kishtechsite.online';
+          }
         }, 300);
-      });
+      };
 
-      // Touch support for mobile
-      document.addEventListener('touchstart', () => {
-        clearInterval(progressInterval);
-        hudText.textContent = "LAUNCHING...";
-        statusText.textContent = "Loading interface now";
-        progressFill.style.width = "100%";
-        setTimeout(() => {
-          document.getElementById('loading-screen').style.opacity = '0';
-          setTimeout(() => {
-            document.getElementById('loading-screen').style.display = 'none';
-            const username = sessionStorage.getItem('githubUsername') || '';
-            window.location.href = `https://pair.kishtechsite.online?verified=true&user=${encodeURIComponent(username)}`;
-          }, 300);
-        }, 300);
-      });
+      document.addEventListener('click', completeLoading);
+      document.addEventListener('touchstart', completeLoading);
     }
     
     // Main verification function
     async function isForked() {
       const username = document.getElementById('githubUsername').value.trim();
-      const message = document.getElementById('message');
 
       if (!username) {
         showMessage('error', '❌ Please enter your GitHub username');
@@ -760,7 +738,6 @@
 
       if (isForked) {
         showMessage('success', '✅ Repository verified! Loading interface...');
-        // Store verification status in sessionStorage
         sessionStorage.setItem('githubVerified', 'true');
         sessionStorage.setItem('githubUsername', username);
         startLoadingScreen();
@@ -772,7 +749,7 @@
       }
     }
     
-    // Allow clicking anywhere in terminal to focus input
+    // Focus input when clicking terminal
     document.querySelector('.terminal').addEventListener('click', () => {
       input.focus();
     });
