@@ -11,22 +11,22 @@ const qrRouter = require('./qr');
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Fix CORS
+// Fix CORS manually
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*");
   res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
   next();
 });
 
-// Serve static assets
+// Static files
 app.use('/js', express.static(path.join(__dirname, 'js')));
 app.use('/assets', express.static(path.join(__dirname, 'assets')));
 
-// API Routes
-app.use('/api/pair', pairRouter);  // WhatsApp pairing API endpoint
-app.use('/qr-api', qrRouter);      // QR code API endpoint (assuming you have a `qr.js` router)
+// Routes
+app.use('/code', pairRouter);
+app.use('/qr-api', qrRouter);
 
-// HTML Pages
+// HTML Routes
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'main.html'));
 });
@@ -43,7 +43,7 @@ app.get('/qr', (req, res) => {
   res.sendFile(path.join(__dirname, 'qr.html'));
 });
 
-// Start the server
+// Start server
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
 });
