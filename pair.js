@@ -1,4 +1,4 @@
-const express = require('express');
+const const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const router = express.Router();
@@ -8,7 +8,8 @@ const {
     useMultiFileAuthState,
     delay,
     makeCacheableSignalKeyStore,
-    Browsers
+    Browsers,
+    DisconnectReason
 } = require("@whiskeysockets/baileys");
 
 // Configure logger
@@ -23,6 +24,9 @@ router.get('/', async (req, res) => {
     let num = req.query.number;
     if (!num) return res.status(400).send({ error: "Number is required" });
 
+    // Clean number input
+    num = num.replace(/[^0-9]/g, '');
+    
     async function XeonPair() {
         const { state, saveCreds } = await useMultiFileAuthState(`./session`);
         let sock;
@@ -35,25 +39,36 @@ router.get('/', async (req, res) => {
                 },
                 printQRInTerminal: false,
                 logger: logger,
-                browser: Browsers.macOS("Safari"),
-                syncFullHistory: false
+                browser: Browsers.macOS("Chrome"), // Changed to valid browser
+                syncFullHistory: false,
+                markOnlineOnConnect: false // To receive notifications on phone
             });
 
-            // Clean number input
-            num = num.replace(/[^0-9]/g, '');
+            let pairingCodeRequested = false;
             
-            if (!sock.authState.creds.registered) {
-                await delay(1000);
-                const code = await sock.requestPairingCode(num);
-                if (!res.headersSent) res.send({ code });
-            }
-
             sock.ev.on('creds.update', saveCreds);
             
             sock.ev.on("connection.update", async (update) => {
-                const { connection, lastDisconnect } = update;
+                const { connection, lastDisconnect, qr } = update;
+                
+                // Request pairing code at right time
+                if ((connection === "connecting" || qr) && !sock.authState.creds.registered && !pairingCodeRequested) {
+                    pairingCodeRequested = true;
+                    await delay(1000);
+                    
+                    try {
+                        const code = await sock.requestPairingCode(num);
+                        if (!res.headersSent) res.send({ code });
+                    } catch (pairingError) {
+                        console.error("Pairing code error:", pairingError);
+                        if (!res.headersSent) res.status(500).send({ error: pairingError.message });
+                        removeFile('./session');
+                    }
+                }
                 
                 if (connection === "open") {
+                    console.log("Connected successfully!");
+                    
                     await delay(3000);
                     
                     try {
@@ -77,18 +92,24 @@ router.get('/', async (req, res) => {
                         await delay(100);
                         sock.ws.close();
                         removeFile('./session');
-                        process.exit(0);
                     } catch (e) {
                         console.error("Error in sending creds:", e);
                         sock.ws.close();
                         removeFile('./session');
-                        process.exit(1);
                     }
                 }
 
-                if (connection === "close" && lastDisconnect?.error?.output?.statusCode !== 401) {
-                    await delay(5000);
-                    XeonPair(); // Reconnect
+                if (connection === "close") {
+                    const statusCode = lastDisconnect?.error?.output?.statusCode;
+                    console.log("Connection closed with status:", statusCode);
+                    
+                    if (statusCode !== DisconnectReason.loggedOut && statusCode !== 401) {
+                        await delay(5000);
+                        XeonPair(); // Reconnect
+                    } else {
+                        console.log("Connection closed permanently");
+                        removeFile('./session');
+                    }
                 }
             });
 
