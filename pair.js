@@ -49,16 +49,15 @@ const clientstart = async() => {
   });
   
   const state = authState.loadCreds();
-  const { version } = await fetchLatestBaileysVersion();
   
   const client = makeWASocket({
     logger: pino({ level: "silent" }),
     printQRInTerminal: !config.status.terminal,
+    version: [2, 3000, 1023223821],
     auth: state,
     browser: Browsers.ubuntu('Chrome'),
     markOnlineOnConnect: false,
     syncFullHistory: false,
-    version
   });
 
   // Handle connection updates
