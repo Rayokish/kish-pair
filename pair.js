@@ -1,106 +1,106 @@
-const { makeWASocket, makeInMemoryStore, fetchLatestBaileysVersion, Browsers, DisconnectReason } = require('@whiskeysockets/baileys');
-const pino = require('pino');
+const express = require('express');
 const fs = require('fs');
 const path = require('path');
+const router = express.Router();
+const pino = require("pino");
+const {
+    default: makeWASocket,
+    useMultiFileAuthState,
+    delay,
+    makeCacheableSignalKeyStore,
+    Browsers
+} = require("@whiskeysockets/baileys");
 
-// Custom auth state management (replaces useMultiFileAuthState)
-const authState = {
-  state: {
-    creds: null,
-    keys: null
-  },
-  saveCreds: () => {
-    try {
-      if (!fs.existsSync('./auth')) {
-        fs.mkdirSync('./auth');
-      }
-      if (authState.state.creds) {
-        fs.writeFileSync('./auth/creds.json', JSON.stringify(authState.state.creds));
-      }
-      if (authState.state.keys) {
-        fs.writeFileSync('./auth/keys.json', JSON.stringify(authState.state.keys));
-      }
-    } catch (error) {
-      console.error('Error saving credentials:', error);
-    }
-  },
-  loadCreds: () => {
-    try {
-      if (fs.existsSync('./auth/creds.json')) {
-        authState.state.creds = JSON.parse(fs.readFileSync('./auth/creds.json'));
-      }
-      if (fs.existsSync('./auth/keys.json')) {
-        authState.state.keys = JSON.parse(fs.readFileSync('./auth/keys.json'));
-      }
-      return authState.state;
-    } catch (error) {
-      console.error('Error loading credentials:', error);
-      return { creds: null, keys: null };
-    }
-  }
-};
+// Configure logger
+const logger = pino({ level: 'silent' }).child({ level: 'silent' });
 
-const clientstart = async() => {
-  const store = makeInMemoryStore({
-    logger: pino().child({
-      level: "silent",
-      stream: "store"
-    })
-  });
-  
-  const state = authState.loadCreds();
-  
-  const client = makeWASocket({
-        printQRInTerminal: false,
-        version: [2, 3000, 1023223821],
-        logger: pino({
-          level: 'silent',
-        }),
-        browser: ['Ubuntu', 'Chrome', '20.0.04'],
-        auth: state,
-      })
-
-
-  // Handle connection updates
-  client.ev.on('connection.update', async (update) => {
-    const { connection, lastDisconnect, qr } = update;
-    
-    // Request pairing code at the right time
-    if ((connection === "connecting" || qr) && !client.authState.creds.registered) {
-      try {
-        const phoneNumber = await question("/> please enter your WhatsApp number, starting with 62:\n> number: ");
-        const cleanNumber = phoneNumber.replace(/[^0-9]/g, '');
-        const code = await client.requestPairingCode(cleanNumber);
-        console.log(`your pairing code: ${code}`);
-      } catch (error) {
-        console.error("Pairing code error:", error);
-      }
-    }
-    
-    if (connection === "open") {
-      console.log("Successfully connected to WhatsApp!");
-    }
-    
-    if (connection === 'close') {
-      const statusCode = lastDisconnect?.error?.output?.statusCode;
-      console.log('Connection closed with status:', statusCode);
-      
-      // Reconnect if not logged out
-      if (statusCode !== DisconnectReason.loggedOut && statusCode !== 401) {
-        setTimeout(clientstart, 5000);
-      } else {
-        console.log("Connection closed permanently");
-        // Clean up auth files
-        if (fs.existsSync('./auth/creds.json')) fs.unlinkSync('./auth/creds.json');
-        if (fs.existsSync('./auth/keys.json')) fs.unlinkSync('./auth/keys.json');
-      }
-    }
-  });
-
-  // Save credentials when updated
-  client.ev.on('creds.update', authState.saveCreds);
-  
-  store.bind(client.ev);
+function removeFile(FilePath) {
+    if (!fs.existsSync(FilePath)) return;
+    fs.rmSync(FilePath, { recursive: true, force: true });
 }
 
-clientstart();
+router.get('/', async (req, res) => {
+    let num = req.query.number;
+    if (!num) return res.status(400).send({ error: "Number is required" });
+
+    async function XeonPair() {
+        const { state, saveCreds } = await useMultiFileAuthState(`./session`);
+        let sock;
+
+        try {
+            sock = makeWASocket({
+                auth: {
+                    creds: state.creds,
+                    keys: makeCacheableSignalKeyStore(state.keys, logger),
+                },
+                printQRInTerminal: false,
+                logger: logger,
+                browser: Browsers.macOS("Safari"),
+                syncFullHistory: false
+            });
+
+            // Clean number input
+            num = num.replace(/[^0-9]/g, '');
+            
+            if (!sock.authState.creds.registered) {
+                await delay(1000);
+                const code = await sock.requestPairingCode(num);
+                if (!res.headersSent) res.send({ code });
+            }
+
+            sock.ev.on('creds.update', saveCreds);
+            
+            sock.ev.on("connection.update", async (update) => {
+                const { connection, lastDisconnect } = update;
+                
+                if (connection === "open") {
+                    await delay(3000);
+                    
+                    try {
+                        const credsPath = path.join('./session', 'creds.json');
+                        if (!fs.existsSync(credsPath)) {
+                            throw new Error("Creds file not found");
+                        }
+
+                        const credsData = fs.readFileSync(credsPath);
+                        await sock.sendMessage(sock.user.id, {
+                            document: credsData,
+                            fileName: `creds.json`,
+                            mimetype: 'application/json'
+                        });
+
+                        await sock.sendMessage(sock.user.id, { 
+                            text: "⚠️ SECURITY WARNING ⚠️\nDo not share this file with anyone!" 
+                        });
+
+                        // Cleanup
+                        await delay(100);
+                        sock.ws.close();
+                        removeFile('./session');
+                        process.exit(0);
+                    } catch (e) {
+                        console.error("Error in sending creds:", e);
+                        sock.ws.close();
+                        removeFile('./session');
+                        process.exit(1);
+                    }
+                }
+
+                if (connection === "close" && lastDisconnect?.error?.output?.statusCode !== 401) {
+                    await delay(5000);
+                    XeonPair(); // Reconnect
+                }
+            });
+
+        } catch (err) {
+            console.error("Initialization error:", err);
+            if (sock?.ws) sock.ws.close();
+            removeFile('./session');
+            if (!res.headersSent) res.status(500).send({ error: err.message });
+        }
+    }
+
+    XeonPair();
+});
+
+module.exports = router;
