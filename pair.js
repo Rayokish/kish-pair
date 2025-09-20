@@ -51,14 +51,15 @@ const clientstart = async() => {
   const state = authState.loadCreds();
   
   const client = makeWASocket({
-    logger: pino({ level: "silent" }),
-    printQRInTerminal: !config.status.terminal,
-    version: [2, 3000, 1023223821],
-    auth: state,
-    browser: Browsers.ubuntu('Chrome'),
-    markOnlineOnConnect: false,
-    syncFullHistory: false,
-  });
+        printQRInTerminal: false,
+        version: [2, 3000, 1023223821],
+        logger: pino({
+          level: 'silent',
+        }),
+        browser: ['Ubuntu', 'Chrome', '20.0.04'],
+        auth: state,
+      })
+
 
   // Handle connection updates
   client.ev.on('connection.update', async (update) => {
