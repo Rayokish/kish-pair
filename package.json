@@ -28,7 +28,7 @@
   },
   "homepage": "https://github.com/Rayokish/kish-pair#readme",
   "dependencies": {
-    "@whiskeysockets/baileys": "6.7.17",
+    "@whiskeysockets/baileys": "latest",
     "maher-zubair-baileys": "^6.6.5",
     "qrcode": "1.5.3",
     "awesome-phonenumber": "^2.64.0",
