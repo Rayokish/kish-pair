@@ -143,7 +143,7 @@
       height: 100%;
       width: 100%;
       background: linear-gradient(90deg, var(--primary), var(--secondary));
-      animation: progressAnimation 40s linear infinite;
+      animation: progressAnimation 40s linear forwards;
       transform-origin: left;
     }
     
@@ -263,7 +263,7 @@
       </div>
       
       <div class="progress-container">
-        <div class="progress-bar" id="progress-bar"></div>
+        <div id="progress-bar" class="progress-bar"></div>
       </div>
       
       <div class="time-remaining" id="time-remaining">Refreshing in 40 seconds</div>
@@ -300,10 +300,24 @@
       timeRemaining.textContent = `Refreshing in ${seconds} seconds`;
     }
 
+    function restartProgressBar() {
+      // Remove and re-add the progress bar to restart the animation
+      progressBar.style.animation = 'none';
+      // Trigger reflow
+      void progressBar.offsetWidth;
+      progressBar.style.animation = 'progressAnimation 40s linear forwards';
+    }
+
     function startCountdown() {
       let seconds = refreshInterval / 1000;
       updateTimeRemaining(seconds);
+      
+      // Restart the progress bar animation
+      restartProgressBar();
 
+      // Clear any existing countdown
+      clearInterval(countdown);
+      
       countdown = setInterval(() => {
         seconds--;
         updateTimeRemaining(seconds);
