@@ -25,7 +25,7 @@ app.use(express.static(path.join(__dirname)));
 app.use('/code', pairRouter);
 app.use('/qr-api', qrRouter);
 
-// HTML Routes - FIXED
+// HTML Routes
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
@@ -42,15 +42,10 @@ app.get('/qr', (req, res) => {
   res.sendFile(path.join(__dirname, 'qr.html'));
 });
 
-// Add this catch-all route for any other requests
-app.get('*', (req, res) => {
-  res.status(404).send('Page not found');
-});
-
 // Start server
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
-  console.log(`📱 Pair page: http://localhost:${PORT}/pair`);
-  console.log(`🔗 Fork check: http://localhost:${PORT}/fork-check`);
+  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`📱 Main page: http://localhost:${PORT}`);
+  console.log(`🔗 Pair page: http://localhost:${PORT}/pair`);
   console.log(`📷 QR page: http://localhost:${PORT}/qr`);
 });
