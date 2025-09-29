@@ -11,7 +11,7 @@ const pino = require('pino');
 const fetch = require('node-fetch');
 const { exec } = require('child_process');
 
-const sessionFolder = './session;
+const sessionFolder = './SESSION';
 if (fs.existsSync(sessionFolder)) {
   try {
     fs.rmdirSync(sessionFolder, { recursive: true });
@@ -42,7 +42,7 @@ app.use(
 
 
     async function Guru() {
-      const { state, saveCreds } = await useMultiFileAuthState('./session);
+      const { state, saveCreds } = await useMultiFileAuthState('./SESSION');
     
       try {
         let conn = makeWASocket({
