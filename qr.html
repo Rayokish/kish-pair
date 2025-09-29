@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KISH-MD QR Session</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            text-align: center;
+            max-width: 400px;
+            width: 100%;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        .qr-container {
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+        .instructions {
+            background: #e9ecef;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            text-align: left;
+        }
+        .instructions ol {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+        .instructions li {
+            margin-bottom: 8px;
+        }
+        .btn {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .btn:hover {
+            background: #0056b3;
+        }
+        .btn-secondary {
+            background: #6c757d;
+        }
+        .btn-secondary:hover {
+            background: #545b62;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📱 KISH-MD QR Session</h1>
+        <p>Scan the QR code below with WhatsApp to connect your session</p>
+        
+        <div class="qr-container">
+            <img id="qrImage" src="/qr-api" alt="QR Code" style="max-width: 100%;">
+        </div>
+
+        <div class="instructions">
+            <h3>📋 Instructions:</h3>
+            <ol>
+                <li>Open WhatsApp on your phone</li>
+                <li>Tap Menu → Linked Devices</li>
+                <li>Tap Link a Device</li>
+                <li>Scan the QR code above</li>
+                <li>Wait for session file to be sent</li>
+            </ol>
+        </div>
+
+        <div>
+            <button class="btn" onclick="refreshQR()">🔄 Refresh QR</button>
+            <a href="/" class="btn btn-secondary">🏠 Back to Home</a>
+        </div>
+
+        <p style="margin-top: 20px; color: #666; font-size: 14px;">
+            Having issues? Try the <a href="/pair">Pair Code</a> method instead.
+        </p>
+    </div>
+
+    <script>
+        function refreshQR() {
+            const qrImage = document.getElementById('qrImage');
+            qrImage.src = '/qr-api?t=' + new Date().getTime();
+        }
+
+        // Auto-refresh QR every 30 seconds
+        setInterval(refreshQR, 30000);
+    </script>
+</body>
+</html>
