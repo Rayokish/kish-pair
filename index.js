@@ -5,7 +5,6 @@ const PORT = process.env.PORT || 8000;
 
 // Import routers
 const pairRouter = require('./pair');
-//const qrRouter = require('./qr');
 
 // Middleware
 app.use(express.json());
@@ -24,7 +23,6 @@ app.use('/assets', express.static(path.join(__dirname, 'assets')));
 
 // Routes
 app.use('/code', pairRouter);
-//app.use('/qr-api', qrRouter);
 
 // HTML Routes
 app.get('/', (req, res) => {
@@ -36,9 +34,10 @@ app.get('/fork-check', (req, res) => {
 });
 
 app.get('/pair', (req, res) => {
-
+  res.sendFile(path.join(__dirname, 'pair.html'));
+}); 
 
 // Start server
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
-});
+}); 
