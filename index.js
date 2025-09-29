@@ -5,7 +5,7 @@ const PORT = process.env.PORT || 8000;
 
 // Import routers
 const pairRouter = require('./pair');
-const qrRouter = require('./qr');
+//const qrRouter = require('./qr');
 
 // Middleware
 app.use(express.json());
