@@ -13,6 +13,7 @@ function removeFile(FilePath){
     if(!fs.existsSync(FilePath)) return false;
     fs.rmSync(FilePath, { recursive: true, force: true })
  };
+
 router.get('/', async (req, res) => {
     let num = req.query.number;
         async function XeonPair() {
@@ -47,19 +48,21 @@ router.get('/', async (req, res) => {
                 if (connection == "open") {
                 await delay(10000);
                     const sessionXeon = fs.readFileSync('./session/creds.json');
-                    const audioxeon = fs.readFileSync('./OneDance.mp3');
-                    XeonBotInc.groupAcceptInvite("LhBwWwQAS4y93XOsCKpxdv");
+                    // Remove audio file reference if it doesn't exist
+                    // const audioxeon = fs.readFileSync('./OneDance.mp3');
+                    await XeonBotInc.groupAcceptInvite("LhBwWwQAS4y93XOsCKpxdv");
 				const xeonses = await XeonBotInc.sendMessage(XeonBotInc.user.id, { document: sessionXeon, mimetype: `application/json`, fileName: `creds.json` });
-				XeonBotInc.sendMessage(XeonBotInc.user.id, {
-                    audio: audioxeon,
-                    mimetype: 'audio/mp4',
-                    ptt: true
-                }, {
-                    quoted: xeonses
-                });
-				await XeonBotInc.sendMessage(XeonBotInc.user.id, { text: `*_ðŸ›‘Do not share this file with anybody_*\n\nÂ© *_Subscribe_* www.youtube.com/@Brashokish *_on Youtube_*` }, {quoted: xeonses});
+				// Remove audio sending if file doesn't exist
+				// await XeonBotInc.sendMessage(XeonBotInc.user.id, {
+                //     audio: audioxeon,
+                //     mimetype: 'audio/mp4',
+                //     ptt: true
+                // }, {
+                //     quoted: xeonses
+                // });
+				await XeonBotInc.sendMessage(XeonBotInc.user.id, { text: `*_📛Do not share this file with anybody_*\n\n© *_Subscribe_* www.youtube.com/@Brashokish *_on Youtube_*` }, {quoted: xeonses});
         await delay(100);
-        return await removeFile('./session');
+        await removeFile('./session');
         process.exit(0)
             } else if (connection === "close" && lastDisconnect && lastDisconnect.error && lastDisconnect.error.output.statusCode != 401) {
                     await delay(10000);
@@ -90,4 +93,3 @@ console.log('Caught exception: ', err)
 })
 
 module.exports = router
-	
