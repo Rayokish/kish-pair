@@ -42,10 +42,20 @@ app.get('/qr', (req, res) => {
   res.sendFile(path.join(__dirname, 'qr.html'));
 });
 
+// Health check endpoint for monitoring
+app.get('/health', (req, res) => {
+  res.status(200).json({ 
+    status: 'OK', 
+    message: 'KISH-MD Pairing Service is running',
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Start server
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📱 Main page: http://localhost:${PORT}`);
-  console.log(`🔗 Pair page: http://localhost:${PORT}/pair`);
-  console.log(`📷 QR page: http://localhost:${PORT}/qr`);
+  console.log(`🚀 KISH-MD Server running on port ${PORT}`);
+  console.log(`🌐 Main URL: https://pair.kishtechsite.online/`);
+  console.log(`📱 Pair Code: https://pair.kishtechsite.online/pair`);
+  console.log(`📷 QR Code: https://pair.kishtechsite.online/qr`);
+  console.log(`🔍 Fork Check: https://pair.kishtechsite.online/fork-check`);
 });
