@@ -18,17 +18,16 @@ app.use((req, res, next) => {
   next();
 });
 
-// Static files
-app.use('/js', express.static(path.join(__dirname, 'js')));
-app.use('/assets', express.static(path.join(__dirname, 'assets')));
+// Serve static files from root directory
+app.use(express.static(path.join(__dirname)));
 
 // Routes
 app.use('/code', pairRouter);
 app.use('/qr-api', qrRouter);
 
-// HTML Routes
+// HTML Routes - FIXED
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'main.html'));
+  res.sendFile(path.join(__dirname, 'index.html'));
 });
 
 app.get('/fork-check', (req, res) => {
@@ -43,7 +42,15 @@ app.get('/qr', (req, res) => {
   res.sendFile(path.join(__dirname, 'qr.html'));
 });
 
+// Add this catch-all route for any other requests
+app.get('*', (req, res) => {
+  res.status(404).send('Page not found');
+});
+
 // Start server
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
+  console.log(`📱 Pair page: http://localhost:${PORT}/pair`);
+  console.log(`🔗 Fork check: http://localhost:${PORT}/fork-check`);
+  console.log(`📷 QR page: http://localhost:${PORT}/qr`);
 });
