@@ -3,59 +3,88 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 8000;
 
-// Import routers
-const pairRouter = require('./pair');
-const qrRouter = require('./qr');
+console.log('🚀 Starting KISH-MD server...');
 
-// Middleware
+// Basic middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Fix CORS manually
-app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "*");
-  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
-  next();
-});
+// Serve static files
+app.use(express.static(__dirname));
 
-// Serve static files from root directory
-app.use(express.static(path.join(__dirname)));
-
-// Routes
-app.use('/code', pairRouter);
-app.use('/qr-api', qrRouter);
-
-// HTML Routes
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
-});
-
-app.get('/fork-check', (req, res) => {
-  res.sendFile(path.join(__dirname, 'fork-check.html'));
-});
-
-app.get('/pair', (req, res) => {
-  res.sendFile(path.join(__dirname, 'pair.html'));
-});
-
-app.get('/qr', (req, res) => {
-  res.sendFile(path.join(__dirname, 'qr.html'));
-});
-
-// Health check endpoint for monitoring
+// Health check route (should always work)
 app.get('/health', (req, res) => {
+  console.log('✅ Health check passed');
   res.status(200).json({ 
     status: 'OK', 
-    message: 'KISH-MD Pairing Service is running',
-    timestamp: new Date().toISOString()
+    message: 'KISH-MD Server is running',
+    timestamp: new Date().toISOString(),
+    port: PORT
   });
 });
 
+// Main route
+app.get('/', (req, res) => {
+  try {
+    res.sendFile(path.join(__dirname, 'index.html'));
+  } catch (error) {
+    console.error('Error serving main page:', error);
+    res.send('KISH-MD Server is running');
+  }
+});
+
+// Other routes with error handling
+app.get('/pair', (req, res) => {
+  try {
+    res.sendFile(path.join(__dirname, 'pair.html'));
+  } catch (error) {
+    console.error('Error serving pair page:', error);
+    res.status(500).send('Pair page temporarily unavailable');
+  }
+});
+
+app.get('/qr', (req, res) => {
+  try {
+    res.sendFile(path.join(__dirname, 'qr.html'));
+  } catch (error) {
+    console.error('Error serving QR page:', error);
+    res.status(500).send('QR page temporarily unavailable');
+  }
+});
+
+app.get('/fork-check', (req, res) => {
+  try {
+    res.sendFile(path.join(__dirname, 'fork-check.html'));
+  } catch (error) {
+    console.error('Error serving fork-check page:', error);
+    res.status(500).send('Fork check page temporarily unavailable');
+  }
+});
+
+// Error handling
+app.use((err, req, res, next) => {
+  console.error('❌ Server error:', err);
+  res.status(500).send('Internal server error');
+});
+
+// 404 handler
+app.use((req, res) => {
+  res.status(404).send('Page not found');
+});
+
 // Start server
-app.listen(PORT, () => {
-  console.log(`🚀 KISH-MD Server running on port ${PORT}`);
+const server = app.listen(PORT, '0.0.0.0', () => {
+  console.log(`✅ KISH-MD Server started successfully on port ${PORT}`);
   console.log(`🌐 Main URL: https://pair.kishtechsite.online/`);
-  console.log(`📱 Pair Code: https://pair.kishtechsite.online/pair`);
-  console.log(`📷 QR Code: https://pair.kishtechsite.online/qr`);
-  console.log(`🔍 Fork Check: https://pair.kishtechsite.online/fork-check`);
+}).on('error', (err) => {
+  console.error('❌ Failed to start server:', err);
+  process.exit(1);
+});
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received, shutting down gracefully');
+  server.close(() => {
+    console.log('Process terminated');
+  });
 });
