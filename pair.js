@@ -1,95 +1,142 @@
+
 const express = require('express');
 const fs = require('fs');
-let router = express.Router()
+const path = require('path');
+const router = express.Router();
 const pino = require("pino");
 const {
-    default: makeWASocket,
-    useMultiFileAuthState,
-    delay,
-    makeCacheableSignalKeyStore
+  default: makeWASocket,
+  useMultiFileAuthState,
+  delay,
+  makeCacheableSignalKeyStore,
+  Browsers
 } = require("@whiskeysockets/baileys");
 
-function removeFile(FilePath){
-    if(!fs.existsSync(FilePath)) return false;
-    fs.rmSync(FilePath, { recursive: true, force: true })
- };
+const SESSION_PATH = './session';
+const logger = pino({ level: 'silent' }).child({ level: 'silent' });
+
+// Cleanup session
+const cleanupSession = async () => {
+  if (fs.existsSync(SESSION_PATH)) {
+    try {
+      await fs.promises.rm(SESSION_PATH, { recursive: true, force: true });
+      console.log('✅ Session cleaned');
+    } catch (err) {
+      console.error('⚠️ Cleanup failed:', err);
+    }
+  }
+};
+
+// Retry wrapper
+async function connectWithRetry(connectFn, maxRetries = 3, delayMs = 5000) {
+  let retries = 0;
+  while (retries < maxRetries) {
+    try {
+      return await connectFn();
+    } catch (err) {
+      retries++;
+      console.error(`Retry ${retries} failed:`, err.message);
+      if (retries < maxRetries) {
+        await delay(delayMs);
+        await cleanupSession();
+      }
+    }
+  }
+  throw new Error('❌ Max retries reached');
+}
 
 router.get('/', async (req, res) => {
-    let num = req.query.number;
-        async function XeonPair() {
-        const {
-            state,
-            saveCreds
-        } = await useMultiFileAuthState(`./session`)
-     try {
-            let XeonBotInc = makeWASocket({
-                auth: {
-                    creds: state.creds,
-                    keys: makeCacheableSignalKeyStore(state.keys, pino({level: "fatal"}).child({level: "fatal"})),
-                },
-                printQRInTerminal: false,
-                logger: pino({level: "fatal"}).child({level: "fatal"}),
-                browser: ["Chrome (Linux)", "", ""]
-             });
-             if(!XeonBotInc.authState.creds.registered) {
-                await delay(1500);
-                        num = num.replace(/[^0-9]/g,'');
-                            const code = await XeonBotInc.requestPairingCode(num)
-                 if(!res.headersSent){
-                 await res.send({code});
-                     }
-                 }
-            XeonBotInc.ev.on('creds.update', saveCreds)
-            XeonBotInc.ev.on("connection.update", async (s) => {
-                const {
-                    connection,
-                    lastDisconnect
-                } = s;
-                if (connection == "open") {
-                await delay(10000);
-                    const sessionXeon = fs.readFileSync('./session/creds.json');
-                    // Remove audio file reference if it doesn't exist
-                    // const audioxeon = fs.readFileSync('./OneDance.mp3');
-                    await XeonBotInc.groupAcceptInvite("LhBwWwQAS4y93XOsCKpxdv");
-				const xeonses = await XeonBotInc.sendMessage(XeonBotInc.user.id, { document: sessionXeon, mimetype: `application/json`, fileName: `creds.json` });
-				// Remove audio sending if file doesn't exist
-				// await XeonBotInc.sendMessage(XeonBotInc.user.id, {
-                //     audio: audioxeon,
-                //     mimetype: 'audio/mp4',
-                //     ptt: true
-                // }, {
-                //     quoted: xeonses
-                // });
-				await XeonBotInc.sendMessage(XeonBotInc.user.id, { text: `*_📛Do not share this file with anybody_*\n\n© *_Subscribe_* www.youtube.com/@Brashokish *_on Youtube_*` }, {quoted: xeonses});
-        await delay(100);
-        await removeFile('./session');
-        process.exit(0)
-            } else if (connection === "close" && lastDisconnect && lastDisconnect.error && lastDisconnect.error.output.statusCode != 401) {
-                    await delay(10000);
-                    XeonPair();
-                }
-            });
-        } catch (err) {
-            console.log("service restated");
-            await removeFile('./session');
-         if(!res.headersSent){
-            await res.send({code:"Service Unavailable"});
-         }
-        }
+  let num = req.query.number;
+  if (!num) return res.status(400).send({ error: "Number is required" });
+
+  await cleanupSession();
+
+  let sock;
+  let qrSent = false;
+
+  const timeout = setTimeout(() => {
+    if (!qrSent) {
+      res.status(408).send("QR scan timeout.");
+      if (sock) sock.end();
     }
-    return await XeonPair()
+  }, 2 * 60 * 1000);
+
+  const connect = async () => {
+    const { state, saveCreds } = await useMultiFileAuthState(SESSION_PATH);
+    sock = makeWASocket({
+      logger,
+      auth: {
+        creds: state.creds,
+        keys: makeCacheableSignalKeyStore(state.keys, logger)
+      },
+      browser: Browsers.ubuntu("Chrome"),
+      syncFullHistory: false,
+      version: [2, 2413, 1],
+      connectTimeoutMs: 30000,
+      keepAliveIntervalMs: 15000
+    });
+
+    sock.ev.on("connection.update", async (update) => {
+      const { connection, qr, lastDisconnect } = update;
+
+      if (qr && !qrSent) {
+        qrSent = true;
+        const { toBuffer } = require('qrcode');
+        try {
+          const qrImage = await toBuffer(qr);
+          clearTimeout(timeout);
+          res.setHeader('Content-Type', 'image/png');
+          return res.end(qrImage);
+        } catch (err) {
+          console.error("QR Code Error:", err);
+          res.status(500).send("QR generation failed.");
+        }
+      }
+
+      if (connection === "open") {
+        console.log("✅ Connected");
+        await saveCreds();
+        await delay(3000);
+        await sock.sendMessage(sock.user.id, {
+          text: '✅ Connected successfully!
+Do not share your session.'
+        });
+        await delay(3000);
+        await sock.end();
+        await cleanupSession();
+      }
+
+      if (connection === "close") {
+        const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== 401;
+        console.log("Disconnected:", lastDisconnect?.error?.message || "Unknown");
+
+        if (shouldReconnect) {
+          await delay(5000);
+          await cleanupSession();
+          await connect();
+        } else {
+          await cleanupSession();
+        }
+      }
+    });
+
+    sock.ev.on('creds.update', saveCreds);
+  };
+
+  try {
+    await connectWithRetry(connect);
+  } catch (err) {
+    console.error("Fatal connection error:", err);
+    if (!res.headersSent) res.status(500).send("Failed to connect: " + err.message);
+    await cleanupSession();
+  }
+
+  req.on('close', () => {
+    if (!qrSent && sock) {
+      sock.end();
+      cleanupSession();
+    }
+  });
 });
 
-process.on('uncaughtException', function (err) {
-let e = String(err)
-if (e.includes("conflict")) return
-if (e.includes("Socket connection timeout")) return
-if (e.includes("not-authorized")) return
-if (e.includes("rate-overlimit")) return
-if (e.includes("Connection Closed")) return
-if (e.includes("Timed Out")) return
-if (e.includes("Value not found")) return
-console.log('Caught exception: ', err)
-})
-
-module.exports = router
+module.exports = router;
