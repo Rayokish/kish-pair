@@ -1,215 +1,123 @@
-const express = require('express');
-const fs = require('fs');
-const path = require('path');
-const router = express.Router();
-const pino = require("pino");
+const express = require('express')
+const fs = require('fs')
+const path = require('path')
+const pino = require('pino')
 const {
-    default: makeWASocket,
-    useMultiFileAuthState,
-    delay,
-    makeCacheableSignalKeyStore,
-    Browsers
-} = require("@whiskeysockets/baileys");
+  default: makeWASocket,
+  useMultiFileAuthState,
+  delay,
+  makeCacheableSignalKeyStore,
+  Browsers
+} = require('@whiskeysockets/baileys')
 
-// Configure logger
-const logger = pino({ level: 'silent' }).child({ level: 'silent' });
+const router = express.Router()
+const logger = pino({ level: 'silent' })
 
-function removeFile(FilePath) {
-    if (!fs.existsSync(FilePath)) return;
-    fs.rmSync(FilePath, { recursive: true, force: true });
+const SESSION_DIR = './session'
+
+function cleanSession() {
+  if (fs.existsSync(SESSION_DIR)) {
+    fs.rmSync(SESSION_DIR, { recursive: true, force: true })
+  }
 }
 
 router.get('/', async (req, res) => {
-    let num = req.query.number;
-    if (!num) return res.status(400).send({ error: "Number is required" });
+  let number = req.query.number
+  if (!number) {
+    return res.status(400).json({ error: 'Number is required' })
+  }
 
-    let responseSent = false;
-    let sock = null;
+  number = number.replace(/[^0-9]/g, '')
 
-    async function XeonPair() {
-        // Clean session at start for fresh pairing
-        removeFile('./session');
-        
-        const { state, saveCreds } = await useMultiFileAuthState(`./session`);
-        
-        try {
-            sock = makeWASocket({
-                auth: {
-                    creds: state.creds,
-                    keys: makeCacheableSignalKeyStore(state.keys, logger),
-                },
-                printQRInTerminal: false,
-                logger: logger,
-                browser: Browsers.macOS("Safari"),
-                syncFullHistory: false
-            });
+  let sock
+  let replied = false
 
-            // Clean number input
-            num = num.replace(/[^0-9]/g, '');
-            
-            // Request pairing code if not registered
-            if (!state.creds.registered) {
-                await delay(1500);
-                try {
-                    const code = await sock.requestPairingCode(num);
-                    console.log(`Pairing code generated: ${code}`);
-                    if (!responseSent) {
-                        responseSent = true;
-                        res.send({ 
-                            code: code,
-                            message: "Use this code to pair your device"
-                        });
-                    }
-                } catch (pairError) {
-                    console.error("Pairing code error:", pairError);
-                    if (!responseSent) {
-                        responseSent = true;
-                        res.status(500).send({ error: "Failed to generate pairing code: " + pairError.message });
-                    }
-                    return;
-                }
-            }
+  try {
+    const { state, saveCreds } = await useMultiFileAuthState(SESSION_DIR)
 
-            sock.ev.on('creds.update', saveCreds);
-            
-            sock.ev.on("connection.update", async (update) => {
-                const { connection, lastDisconnect, qr } = update;
-                
-                console.log("Connection update:", connection);
-                
-                if (connection === "open") {
-                    console.log("✅ Connected to WhatsApp!");
-                    
-                    try {
-                        // Wait a bit for connection to stabilize
-                        await delay(3000);
-                        
-                        const credsPath = path.join('./session', 'creds.json');
-                        if (!fs.existsSync(credsPath)) {
-                            throw new Error("Creds file not found");
-                        }
+    sock = makeWASocket({
+      auth: {
+        creds: state.creds,
+        keys: makeCacheableSignalKeyStore(state.keys, logger)
+      },
+      logger,
+      browser: Browsers.macOS('Safari'),
+      printQRInTerminal: false,
+      syncFullHistory: false
+    })
 
-                        const credsData = fs.readFileSync(credsPath);
-                        const userJid = sock.user?.id;
-                        
-                        if (!userJid) {
-                            throw new Error("User JID not available");
-                        }
+    // REQUIRED FOR BAILEYS v7
+    sock.ev.process(async (events) => {
+      if (events['creds.update']) {
+        await saveCreds()
+      }
+    })
 
-                        console.log("Sending credentials file...");
-                        
-                        // Send credentials file
-                        await sock.sendMessage(userJid, {
-                            document: credsData,
-                            fileName: `creds.json`,
-                            mimetype: 'application/json'
-                        });
+    // Wait for socket to stabilize
+    await delay(3000)
 
-                        console.log("Credentials file sent successfully!");
-                        
-                        // Send security warning
-                        await sock.sendMessage(userJid, { 
-                            text: "⚠️ *SECURITY WARNING* ⚠️\n\nThis file contains your WhatsApp session credentials.\n\n*DO NOT SHARE THIS FILE WITH ANYONE!*\n\nKeep it secure and never expose it publicly." 
-                        });
+    // Generate pairing code
+    if (!state.creds.registered) {
+      const code = await sock.requestPairingCode(number)
 
-                        console.log("Security warning sent!");
-                        
-                        // Send success confirmation
-                        await sock.sendMessage(userJid, { 
-                            text: "✅ Session credentials have been successfully delivered to your WhatsApp!"
-                        });
-
-                        console.log("Success confirmation sent!");
-                        
-                        // Wait a moment before cleanup to ensure messages are delivered
-                        await delay(2000);
-                        
-                        // Cleanup - close connection and remove session
-                        if (sock.ws && sock.ws.readyState === sock.ws.OPEN) {
-                            sock.ws.close();
-                        }
-                        removeFile('./session');
-                        
-                        console.log("Cleanup completed successfully!");
-                        
-                    } catch (sendError) {
-                        console.error("❌ Error in sending creds:", sendError);
-                        
-                        try {
-                            const userJid = sock.user?.id;
-                            if (userJid) {
-                                await sock.sendMessage(userJid, { 
-                                    text: `❌ Error sending credentials: ${sendError.message}` 
-                                });
-                            }
-                        } catch (notificationError) {
-                            console.error("Failed to send error notification:", notificationError);
-                        }
-                        
-                        if (sock.ws && sock.ws.readyState === sock.ws.OPEN) {
-                            sock.ws.close();
-                        }
-                        removeFile('./session');
-                    }
-                }
-
-                if (connection === "close") {
-                    console.log("Connection closed");
-                    const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== 401;
-                    
-                    if (shouldReconnect && !responseSent) {
-                        console.log("Attempting to reconnect...");
-                        await delay(5000);
-                        XeonPair();
-                    } else if (lastDisconnect?.error) {
-                        console.error("Disconnection error:", lastDisconnect.error);
-                        if (!responseSent) {
-                            responseSent = true;
-                            res.status(500).send({ error: "Connection failed: " + lastDisconnect.error.message });
-                        }
-                    }
-                }
-            });
-
-            // Handle message delivery updates
-            sock.ev.on('messages.upsert', async (messageData) => {
-                const message = messageData.messages[0];
-                if (message && message.key.fromMe) {
-                    console.log("Message delivered:", message.key.id);
-                }
-            });
-
-        } catch (err) {
-            console.error("❌ Initialization error:", err);
-            if (sock?.ws && sock.ws.readyState === sock.ws.OPEN) {
-                sock.ws.close();
-            }
-            removeFile('./session');
-            if (!responseSent) {
-                responseSent = true;
-                res.status(500).send({ error: "Initialization failed: " + err.message });
-            }
-        }
+      if (!replied) {
+        replied = true
+        res.json({
+          code,
+          message: 'Enter this code on WhatsApp → Linked Devices'
+        })
+      }
     }
 
-    // Set timeout for the entire operation
-    const timeout = setTimeout(() => {
-        if (!responseSent) {
-            responseSent = true;
-            res.status(408).send({ error: "Request timeout - please try again" });
-            if (sock?.ws && sock.ws.readyState === sock.ws.OPEN) {
-                sock.ws.close();
-            }
-            removeFile('./session');
+    sock.ev.on('connection.update', async (update) => {
+      const { connection, lastDisconnect } = update
+
+      if (connection === 'open') {
+        console.log('✅ WhatsApp linked successfully')
+
+        // IMPORTANT: keep socket alive so WhatsApp finalizes trust
+        await delay(15000)
+
+        // OPTIONAL: cleanup after successful pairing
+        try {
+          if (sock?.ws?.readyState === sock.ws.OPEN) {
+            sock.ws.close()
+          }
+        } catch {}
+
+        cleanSession()
+      }
+
+      if (connection === 'close') {
+        const statusCode = lastDisconnect?.error?.output?.statusCode
+        console.log('❌ Connection closed:', statusCode)
+
+        if (!replied) {
+          replied = true
+          res.status(500).json({
+            error: 'Failed to link device. Try again.'
+          })
         }
-    }, 120000); // 2 minute timeout
 
-    // Clear timeout if response is sent
-    res.on('finish', () => {
-        clearTimeout(timeout);
-    });
+        cleanSession()
+      }
+    })
+  } catch (err) {
+    console.error('❌ Pairing error:', err)
 
-    XeonPair();
-});
+    if (!replied) {
+      replied = true
+      res.status(500).json({ error: err.message })
+    }
 
-module.exports = router;
+    try {
+      if (sock?.ws?.readyState === sock.ws.OPEN) {
+        sock.ws.close()
+      }
+    } catch {}
+
+    cleanSession()
+  }
+})
+
+module.exports = router
