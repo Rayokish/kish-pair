@@ -19,7 +19,7 @@ function removeFile(dir) {
 
 router.get('/', async (req, res) => {
   let num = req.query.number
-  if (!num) return res.status(400).send({ error: 'Number required' })
+  if (!num) return res.status(400).send({ error: 'Number is required' })
 
   num = num.replace(/[^0-9]/g, '')
 
@@ -44,15 +44,15 @@ router.get('/', async (req, res) => {
         syncFullHistory: false
       })
 
-      // 🔴 REQUIRED IN BAILEYS v7
+      // REQUIRED FOR BAILEYS v7+
       sock.ev.process(async (events) => {
         if (events['creds.update']) await saveCreds()
       })
 
-      // ⏳ allow socket handshake to complete
+      // wait for socket handshake
       await delay(3000)
 
-      // 🔐 request pairing code
+      // request pairing code
       if (!state.creds.registered) {
         const code = await sock.requestPairingCode(num)
         if (!replied) {
@@ -67,52 +67,51 @@ router.get('/', async (req, res) => {
         if (connection === 'open') {
           console.log('✅ WhatsApp paired successfully')
 
-          // ⏳ DO NOT TOUCH SOCKET YET (WhatsApp trust finalization)
+          // IMPORTANT: allow WhatsApp to finalize authorization
           await delay(15000)
 
           try {
-            const sessionFile = './session/creds.json'
-            const audioFile = './OneDance.mp3'
+            const credsPath = './session/creds.json'
+            const audioPath = './OneDance.mp3'
 
-            if (fs.existsSync(sessionFile)) {
-              const sessionData = fs.readFileSync(sessionFile)
+            if (!fs.existsSync(credsPath)) {
+              throw new Error('creds.json not found')
+            }
 
-              const sent = await sock.sendMessage(sock.user.id, {
-                document: sessionData,
-                mimetype: 'application/json',
-                fileName: 'creds.json'
-              })
+            const credsData = fs.readFileSync(credsPath)
 
-              if (fs.existsSync(audioFile)) {
-                await sock.sendMessage(
-                  sock.user.id,
-                  {
-                    audio: fs.readFileSync(audioFile),
-                    mimetype: 'audio/mp4',
-                    ptt: true
-                  },
-                  { quoted: sent }
-                )
-              }
+            const sent = await sock.sendMessage(sock.user.id, {
+              document: credsData,
+              mimetype: 'application/json',
+              fileName: 'creds.json'
+            })
 
+            if (fs.existsSync(audioPath)) {
               await sock.sendMessage(
                 sock.user.id,
                 {
-                  text:
-                    '*_🛑 Do not share this file with anybody_*\n\n' +
-                    '© *_Subscribe_* www.youtube.com/@Brashokish *_on Youtube_*'
+                  audio: fs.readFileSync(audioPath),
+                  mimetype: 'audio/mp4',
+                  ptt: true
                 },
                 { quoted: sent }
               )
             }
 
-            // optional group join
-            await sock.groupAcceptInvite('LhBwWwQAS4y93XOsCKpxdv')
-          } catch (e) {
-            console.error('Post-pair error:', e)
+            await sock.sendMessage(
+              sock.user.id,
+              {
+                text:
+                  '*_🛑 Do not share this file with anybody_*\n\n' +
+                  '© *_Subscribe_* www.youtube.com/@Brashokish *_on Youtube_*'
+              },
+              { quoted: sent }
+            )
+          } catch (err) {
+            console.error('Post-pair send error:', err)
           }
 
-          // ⏳ graceful shutdown AFTER everything
+          // graceful shutdown
           await delay(5000)
 
           try {
